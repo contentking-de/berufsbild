@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-import type { Profession } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import * as XLSX from "xlsx";
 
@@ -20,7 +19,7 @@ function alphabeticalKeyFrom(title: string): string {
   return /[A-Z]/.test(k) ? k : "#";
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const file = form.get("file");
@@ -51,7 +50,7 @@ export async function POST(req: Request) {
       const slug = slugify(title);
       if (!slug) continue;
 
-      const data: Partial<Profession> & Record<string, any> = {
+      const data: Record<string, any> = {
         title,
         subtitle: null,
         excerpt: (r["description FINAL"] ?? r["Description FINAL"] ?? r["DESCRIPTION FINAL"] ?? null)?.toString() ?? null,
