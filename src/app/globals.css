@@ -60,3 +60,182 @@ body {
   border-radius: 0.5rem;
   margin: 1rem 0;
 }
+
+/* Listen im Content sichtbar machen */
+.content-body ul,
+.content-body ol {
+  margin: 0 0 1rem 1.5rem;
+  padding-left: 1.5rem;
+}
+.content-body ul {
+  list-style: disc outside;
+}
+.content-body ol {
+  list-style: decimal outside;
+}
+.content-body li {
+  margin-bottom: 0.25rem;
+}
+.content-body ul ul {
+  list-style: circle outside;
+}
+.content-body ul ul ul {
+  list-style: square outside;
+}
+
+/* Admin RichTextEditor Grundtypografie */
+.rte p,
+.rte div {
+  margin-bottom: 1rem;
+  line-height: 1.7;
+  font-size: 1rem;
+}
+.rte h2 {
+  font-size: 1.5rem; /* 24px */
+  font-weight: 700;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.rte h3 {
+  font-size: 1.25rem; /* 20px */
+  font-weight: 700;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+.rte ul,
+.rte ol {
+  margin: 0 0 1rem 1.5rem;
+  padding-left: 1.5rem;
+}
+.rte li {
+  margin-bottom: 0.25rem;
+}
+
+/* Bessere Tabellen-Optik im Content */
+.content-body table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d1d5db; /* zinc-300: klarerer grauer Rahmen */
+  border-radius: 0.5rem;
+  overflow: hidden;
+  margin: 1rem 0;
+  font-size: 0.975rem;
+}
+.content-body th,
+.content-body td {
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #e5e7eb; /* zarte Zell-Gitterlinien */
+  vertical-align: top;
+}
+.content-body th {
+  background: #eff6ff; /* blue-50: dezentes Blau für Header */
+  border-bottom: 1px solid #bfdbfe; /* blue-200: Trennlinie unter Header */
+  font-weight: 600;
+  color: #1e3a8a; /* blue-800: dezente Schriftfarbe */
+  text-align: left;
+}
+.content-body tr:nth-child(even) td {
+  background: #fcfcfc;
+}
+
+/* Gleiche Vorschau-Stile im Editor */
+.rte table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d1d5db; /* Vorschau gleich wie Frontend */
+  border-radius: 0.5rem;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+.rte th,
+.rte td {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #e5e7eb;
+}
+.rte th {
+  background: #eff6ff; /* dezentes Blau */
+  border-bottom: 1px solid #bfdbfe;
+  font-weight: 600;
+  color: #1e3a8a;
+  text-align: left;
+}
+
+/* Meta-Zeile (Datum/Autor) unter Intro */
+.content-body .article-meta {
+  color: #6b7280; /* zinc-500 */
+  font-size: 0.9rem;
+  margin: 0.25rem 0 1.25rem 0;
+}
+.content-body .article-meta time {
+  white-space: nowrap;
+}
+.rte .article-meta {
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin: 0.25rem 0 1.25rem 0;
+}
+
+/* Moderner FAQ-Block (details/summary) im Content */
+.content-body details {
+  border: 1px solid #e5e7eb; /* zinc-200 */
+  border-left: 4px solid #3b82f6; /* blue-500 Akzent */
+  border-radius: 0.5rem;
+  background: #f8fafc; /* zinc-50 */
+  margin: 0.75rem 0;
+  overflow: hidden;
+  transition: box-shadow 150ms ease;
+}
+.content-body details:hover {
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);
+}
+.content-body summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.9rem 1rem;
+  font-weight: 600;
+  color: #0b0b0b;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  position: relative;
+}
+.content-body summary::-webkit-details-marker { display: none; }
+.content-body summary::after {
+  content: "";
+  width: 0.6rem;
+  height: 0.6rem;
+  border-right: 2px solid #3f3f46; /* zinc-700 */
+  border-bottom: 2px solid #3f3f46;
+  transform: rotate(-45deg);
+  margin-left: auto;
+  transition: transform 150ms ease;
+}
+.content-body details[open] summary::after {
+  transform: rotate(45deg);
+}
+.content-body details > *:not(summary) {
+  padding: 0 1rem 1rem 1rem;
+  color: #27272a; /* zinc-800 */
+}
+.content-body details + details {
+  margin-top: 0.5rem;
+}
+
+/* Gleiche FAQ-Vorschau im Editor */
+.rte details {
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #3b82f6;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  margin: 0.75rem 0;
+}
+.rte summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.8rem 1rem;
+  font-weight: 600;
+}
+.rte summary::-webkit-details-marker { display: none; }
+.rte details > *:not(summary) {
+  padding: 0 1rem 1rem 1rem;
+}

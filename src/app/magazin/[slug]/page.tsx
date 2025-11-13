@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import MagazineSidebar from "@/components/magazin/MagazineSidebar";
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -21,8 +22,14 @@ export default async function ArticlePage({ params }: Params) {
   if (!article || article.status !== "PUBLISHED") {
     notFound();
   }
+  const others = await prisma.article.findMany({
+    where: { status: "PUBLISHED", NOT: { slug } },
+    orderBy: [{ publishedAt: "desc" }],
+    select: { slug: true, title: true, publishedAt: true },
+    take: 100,
+  });
   return (
-    <article className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
+    <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
       <header>
         <p className="text-sm text-zinc-500">Magazin</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">{article.title}</h1>
@@ -35,26 +42,38 @@ export default async function ArticlePage({ params }: Params) {
           ) : null}
         </div>
       </header>
-
-      {article.coverImageUrl ? (
-        <div className="mt-8 overflow-hidden rounded-xl border">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={article.coverImageUrl}
-            alt={article.title}
-            className="h-64 w-full object-cover"
+      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <article className="lg:col-span-2">
+          {article.coverImageUrl ? (
+            <div className="overflow-hidden rounded-xl border">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={article.coverImageUrl}
+                alt={article.title}
+                className="h-64 w-full object-cover"
+              />
+            </div>
+          ) : null}
+          <section className="content-body mt-8">
+            {article.content ? (
+              <div dangerouslySetInnerHTML={{ __html: article.content }} />
+            ) : (
+              <p className="text-zinc-600">Für diesen Artikel liegt noch kein Inhalt vor.</p>
+            )}
+          </section>
+        </article>
+        <div className="lg:col-span-1">
+          {/* @ts-expect-error client component */}
+          <MagazineSidebar
+            articles={others.map((o) => ({
+              slug: o.slug,
+              title: o.title,
+              publishedAt: o.publishedAt ? o.publishedAt.toISOString() : null,
+            }))}
           />
         </div>
-      ) : null}
-
-      <section className="content-body mt-8">
-        {article.content ? (
-          <div dangerouslySetInnerHTML={{ __html: article.content }} />
-        ) : (
-          <p className="text-zinc-600">Für diesen Artikel liegt noch kein Inhalt vor.</p>
-        )}
-      </section>
-    </article>
+      </div>
+    </div>
   );
 }
 
