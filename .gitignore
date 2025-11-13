@@ -1,0 +1,17 @@
+# Node/Next
+node_modules/
+.next/
+out/
+.next-cache/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Prisma Client (wird per `prisma generate` gebaut)
+src/generated/
+
+# OS/Editor
+.DS_Store
+*.log

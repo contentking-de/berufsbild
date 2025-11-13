@@ -1,0 +1,130 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+enum UserRole {
+  ADMIN
+  EDITOR
+}
+
+enum PublishStatus {
+  DRAFT
+  PUBLISHED
+}
+
+// ---------- Auth (NextAuth.js Prisma Adapter) ----------
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String?   @unique
+  emailVerified  DateTime?
+  passwordHash   String?
+  role           UserRole  @default(EDITOR)
+  image          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  accounts       Account[]
+  sessions       Session[]
+  articles       Article[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------- Domain Models ----------
+model Profession {
+  id               String         @id @default(cuid())
+  slug             String         @unique
+  title            String
+  subtitle         String?
+  excerpt          String?        @db.Text
+  content          String?        @db.Text
+  category         String?
+  heroImageUrl     String?
+  seoTitle         String?
+  seoDescription   String?
+  status           PublishStatus  @default(DRAFT)
+  alphabeticalKey  String         // erster Buchstabe (A-Z/#)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  // Zusätzliche Spalten entsprechend Excel-Headern
+  berufsbild               String? @map("Berufsbild")
+  berufsbildMaennlich      String? @map("Berufsbild männlich")
+  berufsbildWeiblich       String? @map("Berufsbild weiblich")
+  kldb                     String? @map("KldB")
+  descriptionFinal         String? @db.Text @map("description FINAL")
+  titleFinal               String? @map("Title FINAL")
+  kidbFinal                String? @map("KIDB final")
+
+  @@index([alphabeticalKey])
+  @@index([status, updatedAt])
+}
+
+model Article {
+  id             String         @id @default(cuid())
+  slug           String         @unique
+  title          String
+  excerpt        String?        @db.Text
+  content        String?        @db.Text
+  coverImageUrl  String?
+  tags           String[]
+  status         PublishStatus  @default(DRAFT)
+  publishedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  authorId String?
+  author   User?          @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([status, publishedAt])
+}
