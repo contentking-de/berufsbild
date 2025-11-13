@@ -15,9 +15,9 @@ export async function GET(req: Request) {
       ? {
           status: "PUBLISHED" as const,
           OR: [
-            { title: { contains: q, mode: "insensitive" } },
-            { subtitle: { contains: q, mode: "insensitive" } },
-            { content: { contains: q, mode: "insensitive" } },
+            { title: { contains: q, mode: "insensitive" as const } },
+            { subtitle: { contains: q, mode: "insensitive" as const } },
+            { content: { contains: q, mode: "insensitive" as const } },
           ],
         }
       : letter

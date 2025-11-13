@@ -55,8 +55,8 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
         ? {
             status: "PUBLISHED" as const,
             OR: [
-              { title: { contains: query, mode: "insensitive" } },
-              { subtitle: { contains: query, mode: "insensitive" } },
+              { title: { contains: query, mode: "insensitive" as const } },
+              { subtitle: { contains: query, mode: "insensitive" as const } },
             ],
           }
         : { status: "PUBLISHED" as const };

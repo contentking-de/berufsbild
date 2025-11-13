@@ -6,11 +6,11 @@ export default function PerfMeasureGuard() {
   useEffect(() => {
     if (process.env.NODE_ENV === "production") return;
     if (typeof performance === "undefined" || typeof performance.measure !== "function") return;
-    const original = performance.measure.bind(performance);
+    const original = performance.measure.bind(performance) as (...a: any[]) => any;
     performance.measure = ((...args: any[]) => {
       try {
         // Safari/Extensions können fehlerhafte Marks/negative Zeiten verursachen
-        return original(...args as any);
+        return original.apply(performance, args);
       } catch {
         return undefined as any;
       }

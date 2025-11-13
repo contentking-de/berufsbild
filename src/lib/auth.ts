@@ -47,15 +47,13 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        // @ts-expect-error add custom role on token
-        token.role = (user as any).role ?? "EDITOR";
+        (token as any).role = (user as any).role ?? "EDITOR";
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        // @ts-expect-error propagate role to session
-        session.user.role = (token as any).role ?? "EDITOR";
+        (session.user as any).role = (token as any).role ?? "EDITOR";
       }
       return session;
     },

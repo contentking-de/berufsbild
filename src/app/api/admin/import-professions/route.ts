@@ -79,12 +79,8 @@ export async function POST(req: NextRequest) {
         });
         updated += 1;
       } else {
-        await prisma.profession.create({
-          data: {
-            slug,
-            ...data,
-          },
-        });
+        const createData = { ...data, slug } as any; // enthält title & alphabeticalKey
+        await prisma.profession.create({ data: createData });
         created += 1;
       }
       processed += 1;
