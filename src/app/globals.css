@@ -66,6 +66,18 @@ body {
   scroll-margin-top: 90px;
 }
 
+/* TOC: dezentes Blau für Sprungmarkenlinks */
+.toc-nav a {
+  color: #2563eb !important; /* blue-600 */
+}
+.toc-nav a:hover,
+.toc-nav a:focus {
+  color: #1d4ed8; /* blue-700 */
+}
+.toc-nav a:visited {
+  color: #2563eb !important;
+}
+
 /* Listen im Content sichtbar machen */
 .content-body ul,
 .content-body ol {

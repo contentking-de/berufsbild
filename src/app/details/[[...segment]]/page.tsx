@@ -13,17 +13,29 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function autolinkProfessions(html: string, terms: Array<{ title: string; slug: string }>): string {
+function makeRegexForTerm(term: string): RegExp {
+  // Erzeuge flexibles Muster: erlaubt Leerzeichen/Non‑Breaking Space/Bindestrich zwischen Wörtern
+  const tokens = term
+    .trim()
+    .split(/[\s\-]+/)
+    .filter(Boolean)
+    .map((t) => escapeRegex(t));
+  if (tokens.length === 0) return /$a/u; // no-op
+  const joined = tokens.join("[\\s\\u00A0\\-]+");
+  // Wortähnliche Grenzen über Unicode: nicht von Buchstaben/Ziffern umschlossen
+  return new RegExp(`(?<![\\p{L}\\p{N}])(${joined})(?![\\p{L}\\p{N}])`, "iu");
+}
+
+function autolinkProfessions(html: string, terms: Array<{ text: string; slug: string }>): string {
   if (!html || terms.length === 0) return html;
   // Sortiere nach Länge absteigend, um lange Titel vor kürzeren zu verlinken
   const patterns = terms
-    .filter((t) => t.title && t.slug)
-    .sort((a, b) => (b.title?.length ?? 0) - (a.title?.length ?? 0))
+    .filter((t) => t.text && t.slug)
+    .sort((a, b) => (b.text?.length ?? 0) - (a.text?.length ?? 0))
     .map((t) => ({
       slug: t.slug,
-      title: t.title,
-      // Unicode Wortgrenzen an den Rändern, case-insensitive
-      re: new RegExp(`\\b${escapeRegex(t.title)}\\b`, "iu"),
+      text: t.text,
+      re: makeRegexForTerm(t.text),
     }));
 
   const linkedOnce = new Set<string>(); // slug → bereits verlinkt
@@ -46,10 +58,10 @@ function autolinkProfessions(html: string, terms: Array<{ title: string; slug: s
     for (const p of patterns) {
       if (linkedOnce.has(p.slug)) continue;
       if (!p.re.test(text)) continue;
-      text = text.replace(p.re, (m) => {
+      text = text.replace(p.re, (_m, g1) => {
         if (linkedOnce.has(p.slug)) return m;
         linkedOnce.add(p.slug);
-        return `<a href="/details/${p.slug}">${m}</a>`;
+        return `<a href="/details/${p.slug}">${g1}</a>`;
       });
     }
     parts[i] = text;
@@ -303,11 +315,20 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
   // Alle anderen veröffentlichten Berufe laden, um Auto-Verlinkungen zu setzen
   const linkTargets = await prisma.profession.findMany({
     where: { status: "PUBLISHED", NOT: { id: profession.id } },
-    select: { title: true, slug: true },
+    select: { berufsbild: true, slug: true },
     take: 500,
   });
+  // Zufällige weitere Berufe für Sidebar
+  const randomOthers = await prisma.$queryRaw<
+    { slug: string; berufsbild: string }[]
+  >`SELECT "slug","Berufsbild" AS "berufsbild" FROM "Profession" WHERE "status" = 'PUBLISHED' AND "id" <> ${profession.id} ORDER BY random() LIMIT 12`;
   const linkedHtml = profession.content
-    ? autolinkProfessions(profession.content, linkTargets.filter((t) => t.title && t.slug) as Array<{ title: string; slug: string }>)
+    ? autolinkProfessions(
+        profession.content,
+        linkTargets
+          .filter((t) => (t as any).berufsbild && t.slug)
+          .map((t) => ({ text: (t as any).berufsbild as string, slug: t.slug })),
+      )
     : "";
   const { htmlWithIds, toc } = addAnchorsAndCollectToc(linkedHtml);
   return (
@@ -334,6 +355,16 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
               <p className="mt-1 text-zinc-800">{profession.kidbFinal}</p>
             </section>
           ) : null}
+          <section className="mt-8 rounded-lg border border-zinc-200 bg-white p-4">
+            <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-600">Mehr zur KIDB‑Nummer</h2>
+            <p className="mt-1 text-zinc-700">
+              Ausführliche Infos zur Klassifikation der Berufe (KIDB/KldB), Aufbau und Beispielen findest du hier:{" "}
+              <Link href="/kidb-nummer" className="text-blue-600 hover:text-blue-700 hover:underline">
+                KIDB‑Nummer erklären
+              </Link>
+              .
+            </p>
+          </section>
         </article>
         <aside className="lg:col-span-1">
           <div className="lg:sticky lg:top-24">
@@ -341,14 +372,14 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
               <div className="border-b border-zinc-200 p-3">
                 <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-600">Inhalt</h2>
               </div>
-              <nav className="max-h-[70vh] overflow-auto p-3 text-sm">
+              <nav className="toc-nav max-h-[70vh] overflow-auto p-3 text-sm">
                 {toc.length === 0 ? (
                   <p className="text-zinc-500">Keine Überschriften gefunden.</p>
                 ) : (
                   <ul className="space-y-1">
                     {toc.map((t) => (
                       <li key={t.id} className={t.level === 3 ? "ml-3" : ""}>
-                        <a href={`#${t.id}`} className="text-zinc-700 hover:underline">
+                        <a href={`#${t.id}`} className="text-blue-600 hover:underline hover:text-blue-700">
                           {t.text}
                         </a>
                       </li>
@@ -356,6 +387,20 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
                   </ul>
                 )}
               </nav>
+            </div>
+            <div className="mt-6 rounded-lg border border-zinc-200">
+              <div className="border-b border-zinc-200 p-3">
+                <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-600">Oft angesehene Berufsbilder</h2>
+              </div>
+              <ul className="divide-y divide-zinc-200 text-sm">
+                {(randomOthers ?? []).map((p) => (
+                  <li key={p.slug} className="p-3">
+                    <Link href={`/details/${p.slug}`} className="text-blue-600 hover:text-blue-700 hover:underline">
+                      {p.berufsbild}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </aside>
