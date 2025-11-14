@@ -22,7 +22,11 @@ export default async function MagazinIndexPage() {
     <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
       <div className="mb-8">
         <h1 className="text-3xl font-semibold tracking-tight">Magazin</h1>
-        <p className="mt-2 text-zinc-600">News, Trends und Einblicke in die Berufswelt.</p>
+        <p className="mt-2 text-zinc-600">
+          Für Schüler:innen, Studierende, Auszubildende, Eltern und Lehrkräfte: praxisnahe Orientierung zur
+          Berufswahl, hilfreiche Tipps für Bewerbungsunterlagen, Strategien fürs Vorstellungsgespräch sowie Trends
+          und verständliche Einblicke in die Berufswelt.
+        </p>
       </div>
 
       {articles.length === 0 ? (

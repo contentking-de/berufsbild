@@ -59,7 +59,7 @@ function autolinkProfessions(html: string, terms: Array<{ text: string; slug: st
       if (linkedOnce.has(p.slug)) continue;
       if (!p.re.test(text)) continue;
       text = text.replace(p.re, (_m, g1) => {
-        if (linkedOnce.has(p.slug)) return m;
+        if (linkedOnce.has(p.slug)) return _m;
         linkedOnce.add(p.slug);
         return `<a href="/details/${p.slug}">${g1}</a>`;
       });
