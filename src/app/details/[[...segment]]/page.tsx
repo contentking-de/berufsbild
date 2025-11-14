@@ -231,7 +231,6 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
       where: { status: "PUBLISHED", alphabeticalKey: upper },
       select: { id: true, slug: true, title: true, subtitle: true, alphabeticalKey: true },
       orderBy: [{ title: "asc" }],
-      take: 200,
     });
     return (
       <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">

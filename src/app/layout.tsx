@@ -40,7 +40,6 @@ export default function RootLayout({
         <PerfMeasureGuard />
         <Header />
         <main>{children}</main>
-        {/* @ts-expect-error client component */}
         <CookieConsent />
         <Footer />
       </body>
