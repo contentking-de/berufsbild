@@ -368,7 +368,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
         </article>
         <aside className="lg:col-span-1">
           <div className="lg:sticky lg:top-24">
-            <div className="rounded-lg border border-zinc-200">
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50">
               <div className="border-b border-zinc-200 p-3">
                 <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-600">Inhalt</h2>
               </div>
