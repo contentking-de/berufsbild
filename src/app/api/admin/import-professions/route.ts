@@ -47,7 +47,9 @@ export async function POST(req: NextRequest) {
       const title = (titleFinal || berufsbildRaw)?.toString().trim();
       if (!title) continue;
 
-      const slug = slugify(title);
+      // Slug strikt aus der Spalte "Berufsbild" erzeugen
+      if (!berufsbildRaw) continue;
+      const slug = slugify(berufsbildRaw);
       if (!slug) continue;
 
       const data: Record<string, any> = {
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
         heroImageUrl: null,
         seoTitle: null,
         seoDescription: null,
-        status: "DRAFT",
+        status: "PUBLISHED",
         alphabeticalKey: alphabeticalKeyFrom(berufsbildRaw || title),
         // gemappte Zusatzfelder
         berufsbild: (berufsbildRaw ?? null)?.toString() ?? null,

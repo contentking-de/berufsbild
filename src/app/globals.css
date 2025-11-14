@@ -60,6 +60,11 @@ body {
   border-radius: 0.5rem;
   margin: 1rem 0;
 }
+/* Angenehmes Scrollen zu Sprungmarken unter sticky Header */
+.content-body h2,
+.content-body h3 {
+  scroll-margin-top: 90px;
+}
 
 /* Listen im Content sichtbar machen */
 .content-body ul,

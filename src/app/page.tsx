@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import Image from "next/image";
 import { prisma } from "@/lib/prisma";
+import MagazineGrid from "@/components/magazin/MagazineGrid";
 
 export const metadata: Metadata = {
   title: "Berufsbilder Datenbank – Berufe von A-Z suchen und finden",
@@ -11,6 +12,12 @@ export default async function Home() {
   const randomProfessions = await prisma.$queryRaw<
     { slug: string; title: string; subtitle: string | null }[]
   >`SELECT "slug","title","subtitle" FROM "Profession" WHERE "status" = 'PUBLISHED' ORDER BY random() LIMIT 9`;
+  const recentArticles = await prisma.article.findMany({
+    where: { status: "PUBLISHED" },
+    orderBy: [{ publishedAt: "desc" }],
+    select: { id: true, slug: true, title: true, excerpt: true, coverImageUrl: true, publishedAt: true },
+    take: 60,
+  });
   return (
     <>
       <section className="relative overflow-hidden">
@@ -177,6 +184,22 @@ export default async function Home() {
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+      </section>
+      <section className="bg-white">
+        <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
+          <h2 className="text-2xl font-semibold tracking-tight">Aktuelle Artikel aus dem Magazin</h2>
+          {recentArticles.length === 0 ? (
+            <p className="mt-4 text-zinc-600">Noch keine Artikel veröffentlicht.</p>
+          ) : (
+            <MagazineGrid
+              articles={recentArticles.map((a) => ({
+                ...a,
+                publishedAt: a.publishedAt ? a.publishedAt.toISOString() : null,
+              }))}
+              initialCount={6}
+            />
           )}
         </div>
       </section>

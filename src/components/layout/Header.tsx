@@ -15,6 +15,14 @@ export function Header() {
             <Link href="/magazin" className="hover:text-zinc-900">
               Magazin
             </Link>
+            <form action="/details" method="get" className="hidden items-center md:flex">
+              <input
+                type="search"
+                name="q"
+                placeholder="Beruf suchen …"
+                className="w-56 rounded-md border border-zinc-300 px-3 py-1.5 text-sm outline-none focus:border-zinc-600"
+              />
+            </form>
           </nav>
         </div>
       </Container>

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import MagazineSidebar from "@/components/magazin/MagazineSidebar";
 
@@ -8,6 +9,47 @@ export const dynamic = "force-dynamic";
 
 export async function generateStaticParams() {
   return [];
+}
+
+function buildDescriptionFromExcerpt(excerpt?: string | null): string | undefined {
+  if (!excerpt) return undefined;
+  // Whitespace komprimieren
+  let text = excerpt.toString().replace(/\s+/g, " ").trim();
+  // Meta-Zeile (Datum/Autor) entfernen, falls am Anfang enthalten
+  text = text.replace(
+    /^veröffentlicht am[^—–-]*[—–-]\s*maya sacotte\s*-\s*redaktion berufsbild\.com\s*/i,
+    "",
+  );
+  // Satz-Erkennung: vollständige Sätze bis ., !, ?, … oder "..."
+  const sentenceRegex = /.+?(?:\.{3}|[.!?…])(?=\s|$)/g;
+  const sentences = text.match(sentenceRegex) || [];
+  if (sentences.length >= 2) {
+    return `${sentences[0].trim()} ${sentences[1].trim()}`;
+  }
+  if (sentences.length === 1) {
+    const firstLen = sentences[0].length;
+    const rest = text.slice(firstLen).trim();
+    const second = rest.match(sentenceRegex)?.[0]?.trim();
+    if (second && second.length > 0) return `${sentences[0].trim()} ${second}`;
+    return sentences[0].trim();
+  }
+  // Fallback: nutze gesamten Text
+  return text.length ? text : undefined;
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  if (!slug) return {};
+  const article = await prisma.article.findUnique({
+    where: { slug },
+    select: { title: true, excerpt: true, status: true },
+  });
+  if (!article || article.status !== "PUBLISHED") return {};
+  const description = buildDescriptionFromExcerpt(article.excerpt);
+  return {
+    title: `${article.title} – Magazin`,
+    description,
+  };
 }
 
 export default async function ArticlePage({ params }: Params) {
