@@ -63,7 +63,6 @@ export default async function ArticlePage({ params }: Params) {
           </section>
         </article>
         <div className="lg:col-span-1">
-          {/* @ts-expect-error client component */}
           <MagazineSidebar
             articles={others.map((o) => ({
               slug: o.slug,
