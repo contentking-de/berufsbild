@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.berufsbild.com";
 
+export const dynamic = "force-dynamic";
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Statische Seiten
   const staticEntries: MetadataRoute.Sitemap = [
@@ -19,7 +21,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     where: { status: "PUBLISHED" },
     select: { slug: true, updatedAt: true },
     orderBy: { updatedAt: "desc" },
-    take: 5000,
   });
   const professionEntries: MetadataRoute.Sitemap = professions.map((p) => ({
     url: `${BASE_URL}/details/${p.slug}`,
@@ -31,7 +32,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     where: { status: "PUBLISHED" },
     select: { slug: true, updatedAt: true, publishedAt: true },
     orderBy: { updatedAt: "desc" },
-    take: 5000,
   });
   const articleEntries: MetadataRoute.Sitemap = articles.map((a) => ({
     url: `${BASE_URL}/magazin/${a.slug}`,
