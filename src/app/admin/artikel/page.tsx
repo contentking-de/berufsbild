@@ -173,7 +173,6 @@ export default async function AdminArticlesPage() {
                               <span className="block text-sm font-medium">Coverbild</span>
                             </div>
                             <div className="flex-1">
-                              {/* @ts-expect-error client component */}
                               <BlobImageUpload articleId={a.id} initialUrl={a.coverImageUrl ?? ""} onSave={updateArticle} />
                               <p className="mt-1 text-xs text-zinc-500">Tipp: Nach dem Hochladen Speichern klicken, um das Cover zu übernehmen.</p>
                             </div>
@@ -181,15 +180,12 @@ export default async function AdminArticlesPage() {
                           <form action={updateArticle} className="space-y-3">
                             <input type="hidden" name="id" value={a.id} />
                             <label className="block text-sm font-medium text-zinc-700">Inhalt</label>
-                            {/* @ts-expect-error dynamic client component */}
                             <RichTextEditor name="content" value={a.content ?? ""} />
                             <div className="pt-2">
-                              {/* @ts-expect-error client component */}
                               <SubmitWithFeedback label="Inhalt speichern" />
                             </div>
                           </form>
                           <div className="">
-                            {/* @ts-expect-error client component */}
                             <GenerateWithAIButton articleId={a.id} defaultTitle={a.title} />
                           </div>
                         </div>
