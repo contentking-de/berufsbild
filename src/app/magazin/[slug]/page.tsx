@@ -22,16 +22,20 @@ function buildDescriptionFromExcerpt(excerpt?: string | null): string | undefine
   );
   // Satz-Erkennung: vollständige Sätze bis ., !, ?, … oder "..."
   const sentenceRegex = /.+?(?:\.{3}|[.!?…])(?=\s|$)/g;
-  const sentences = text.match(sentenceRegex) || [];
+  const match = text.match(sentenceRegex);
+  const sentences: string[] = Array.isArray(match) ? (match as string[]) : [];
   if (sentences.length >= 2) {
-    return `${sentences[0].trim()} ${sentences[1].trim()}`;
+    const first = sentences[0] ?? "";
+    const second = sentences[1] ?? "";
+    return `${first.trim()} ${second.trim()}`.trim();
   }
   if (sentences.length === 1) {
-    const firstLen = sentences[0].length;
+    const firstOnly = sentences[0] ?? "";
+    const firstLen = firstOnly.length;
     const rest = text.slice(firstLen).trim();
     const second = rest.match(sentenceRegex)?.[0]?.trim();
-    if (second && second.length > 0) return `${sentences[0].trim()} ${second}`;
-    return sentences[0].trim();
+    if (second && second.length > 0) return `${firstOnly.trim()} ${second}`;
+    return firstOnly.trim();
   }
   // Fallback: nutze gesamten Text
   return text.length ? text : undefined;
