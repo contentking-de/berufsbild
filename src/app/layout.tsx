@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import PerfMeasureGuard from "@/components/PerfMeasureGuard";
+import CookieConsent from "@/components/CookieConsent";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,6 +40,8 @@ export default function RootLayout({
         <PerfMeasureGuard />
         <Header />
         <main>{children}</main>
+        {/* @ts-expect-error client component */}
+        <CookieConsent />
         <Footer />
       </body>
     </html>
