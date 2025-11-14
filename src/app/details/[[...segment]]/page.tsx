@@ -343,7 +343,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
         </section>
       ) : null}
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-3">
-        <article className="content-body lg:col-span-2">
+        <article className="content-body order-2 lg:order-1 lg:col-span-2">
           {profession.content ? (
             <div dangerouslySetInnerHTML={{ __html: htmlWithIds }} />
           ) : (
@@ -365,8 +365,23 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
               .
             </p>
           </section>
+          {/* Mobile: Oft angesehene Berufsbilder unter dem Content */}
+          <div className="mt-6 rounded-lg border border-zinc-200 lg:hidden">
+            <div className="border-b border-zinc-200 p-3">
+              <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-600">Oft angesehene Berufsbilder</h2>
+            </div>
+            <ul className="divide-y divide-zinc-200 text-sm">
+              {(randomOthers ?? []).map((p) => (
+                <li key={p.slug} className="p-3">
+                  <Link href={`/details/${p.slug}`} className="text-blue-600 hover:text-blue-700 hover:underline">
+                    {p.berufsbild}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         </article>
-        <aside className="lg:col-span-1">
+        <aside className="order-1 lg:order-2 lg:col-span-1">
           <div className="lg:sticky lg:top-24">
             <div className="rounded-lg border border-zinc-200 bg-zinc-50">
               <div className="border-b border-zinc-200 p-3">
@@ -388,7 +403,8 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
                 )}
               </nav>
             </div>
-            <div className="mt-6 rounded-lg border border-zinc-200">
+            {/* Desktop: Oft angesehene Berufsbilder in Sidebar */}
+            <div className="mt-6 hidden rounded-lg border border-zinc-200 lg:block">
               <div className="border-b border-zinc-200 p-3">
                 <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-600">Oft angesehene Berufsbilder</h2>
               </div>
