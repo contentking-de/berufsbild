@@ -36,6 +36,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="de">
+      <head>
+        <meta name="color-scheme" content="light" />
+        <meta name="supported-color-schemes" content="light" />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-zinc-900`}>
         <PerfMeasureGuard />
         <Header />
