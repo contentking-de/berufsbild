@@ -7,6 +7,52 @@ type Params = { params: Promise<{ slug: string }> };
 
 export const dynamic = "force-dynamic";
 
+function stripInlineTags(html: string): string {
+  return html.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+}
+
+function slugifyHeading(input: string): string {
+  return input
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+type TocItem = { id: string; text: string; level: 2 | 3 };
+
+function addAnchorsAndCollectToc(html: string): { htmlWithIds: string; toc: TocItem[] } {
+  const toc: TocItem[] = [];
+  let out = html;
+  // Ersetze h2/h3 ohne id durch h2/h3 mit id und sammle die Texte
+  out = out.replace(/<(h2|h3)([^>]*)>([\s\S]*?)<\/\1>/gi, (m, tag, attrs, inner) => {
+    const level = tag.toLowerCase() === "h2" ? 2 : 3;
+    const text = stripInlineTags(inner);
+    if (!text) return m;
+    // id vorhanden?
+    const hasId = /\sid\s*=/.test(attrs);
+    let id = hasId ? (attrs.match(/\sid\s*=\s*["']([^"']+)["']/i)?.[1] ?? "") : "";
+    if (!id) {
+      id = slugifyHeading(text);
+      // Kollisionen vermeiden: falls id bereits im toc, hänge Zähler an
+      let suffix = 2;
+      const base = id;
+      while (toc.some((t) => t.id === id)) {
+        id = `${base}-${suffix++}`;
+      }
+      // id-Attribut einspritzen
+      const newAttrs = `${attrs} id="${id}"`;
+      toc.push({ id, text, level: level as 2 | 3 });
+      return `<${tag}${newAttrs}>${inner}</${tag}>`;
+    } else {
+      toc.push({ id, text, level: level as 2 | 3 });
+      return m;
+    }
+  });
+  return { htmlWithIds: out, toc };
+}
+
 export async function generateStaticParams() {
   return [];
 }
@@ -74,6 +120,10 @@ export default async function ArticlePage({ params }: Params) {
     select: { slug: true, title: true, publishedAt: true },
     take: 100,
   });
+  // TOC aus Artikel-Content generieren
+  const { htmlWithIds, toc } = article.content
+    ? addAnchorsAndCollectToc(article.content)
+    : { htmlWithIds: article.content ?? "", toc: [] as TocItem[] };
   return (
     <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
       <header>
@@ -101,8 +151,8 @@ export default async function ArticlePage({ params }: Params) {
             </div>
           ) : null}
           <section className="content-body mt-8">
-            {article.content ? (
-              <div dangerouslySetInnerHTML={{ __html: article.content }} />
+            {htmlWithIds ? (
+              <div dangerouslySetInnerHTML={{ __html: htmlWithIds }} />
             ) : (
               <p className="text-zinc-600">Für diesen Artikel liegt noch kein Inhalt vor.</p>
             )}
@@ -110,6 +160,7 @@ export default async function ArticlePage({ params }: Params) {
         </article>
         <div className="lg:col-span-1">
           <MagazineSidebar
+            toc={toc}
             articles={others.map((o) => ({
               slug: o.slug,
               title: o.title,

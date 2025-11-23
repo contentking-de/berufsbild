@@ -9,7 +9,15 @@ type SidebarArticle = {
   publishedAt?: string | null;
 };
 
-export default function MagazineSidebar({ articles }: { articles: SidebarArticle[] }) {
+type TocItem = { id: string; text: string; level: 2 | 3 };
+
+export default function MagazineSidebar({
+  toc,
+  articles,
+}: {
+  toc?: TocItem[];
+  articles: SidebarArticle[];
+}) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -32,6 +40,24 @@ export default function MagazineSidebar({ articles }: { articles: SidebarArticle
           className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
         />
       </div>
+      {toc && toc.length > 0 && (
+        <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50">
+          <div className="border-b border-zinc-200 p-3">
+            <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-600">Inhalt</h2>
+          </div>
+          <nav className="toc-nav max-h-[70vh] overflow-auto p-3 text-sm">
+            <ul className="space-y-1">
+              {toc.map((t) => (
+                <li key={t.id} className={t.level === 3 ? "ml-3" : ""}>
+                  <a href={`#${t.id}`} className="text-blue-600 hover:underline hover:text-blue-700">
+                    {t.text}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </div>
+      )}
       <div className="mt-4 rounded-lg border border-zinc-200">
         <div className="border-b border-zinc-200 p-3">
           <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-600">Weitere Artikel</h2>
