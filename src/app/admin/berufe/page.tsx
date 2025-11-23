@@ -44,7 +44,7 @@ async function deleteProfession(formData: FormData) {
 }
 
 type Props = {
-  searchParams: Promise<{ page?: string; q?: string }>;
+  searchParams: Promise<{ page?: string; q?: string; regenerated?: string }>;
 };
 
 export default async function AdminProfessionsPage({ searchParams }: Props) {
@@ -52,9 +52,19 @@ export default async function AdminProfessionsPage({ searchParams }: Props) {
   const page = Math.max(1, parseInt(params.page || "1", 10));
   const pageSize = 50;
   const skip = (page - 1) * pageSize;
+  const regeneratedFilter = params.regenerated;
+
+  // Filter für contentRegeneratedAt
+  const where =
+    regeneratedFilter === "yes"
+      ? { contentRegeneratedAt: { not: null } }
+      : regeneratedFilter === "no"
+        ? { contentRegeneratedAt: null }
+        : {};
 
   const [professions, total] = await Promise.all([
     prisma.profession.findMany({
+      where,
       orderBy: [{ updatedAt: "desc" }],
       select: {
         id: true,
@@ -62,11 +72,12 @@ export default async function AdminProfessionsPage({ searchParams }: Props) {
         subtitle: true,
         status: true,
         berufsbild: true,
+        contentRegeneratedAt: true,
       },
       skip,
       take: pageSize,
     }),
-    prisma.profession.count(),
+    prisma.profession.count({ where }),
   ]);
 
   const totalPages = Math.ceil(total / pageSize);
@@ -117,6 +128,7 @@ export default async function AdminProfessionsPage({ searchParams }: Props) {
             currentPage={page}
             totalPages={totalPages}
             total={total}
+            regeneratedFilter={regeneratedFilter}
           />
         </div>
       </section>

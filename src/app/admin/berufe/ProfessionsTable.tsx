@@ -10,6 +10,7 @@ type Profession = {
   subtitle: string | null;
   status: "DRAFT" | "PUBLISHED";
   berufsbild: string | null;
+  contentRegeneratedAt: Date | null;
 };
 
 type ProfessionsTableProps = {
@@ -19,6 +20,7 @@ type ProfessionsTableProps = {
   currentPage: number;
   totalPages: number;
   total: number;
+  regeneratedFilter?: string;
 };
 
 export default function ProfessionsTable({
@@ -28,6 +30,7 @@ export default function ProfessionsTable({
   currentPage,
   totalPages,
   total,
+  regeneratedFilter,
 }: ProfessionsTableProps) {
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(searchParams.get("q") || "");
@@ -66,42 +69,74 @@ export default function ProfessionsTable({
     );
   }, [professions, query]);
 
-  function buildPageUrl(page: number, query?: string) {
+  function buildPageUrl(page: number, query?: string, regenerated?: string) {
     const params = new URLSearchParams();
     params.set("page", page.toString());
     if (query) {
       params.set("q", query);
     }
+    if (regenerated) {
+      params.set("regenerated", regenerated);
+    }
     return `/admin/berufe?${params.toString()}`;
+  }
+
+  function handleRegeneratedFilterChange(value: string) {
+    const params = new URLSearchParams();
+    params.set("page", "1"); // Zurück zur ersten Seite
+    if (query) {
+      params.set("q", query);
+    }
+    if (value) {
+      params.set("regenerated", value);
+    }
+    router.push(`/admin/berufe?${params.toString()}`);
   }
 
   return (
     <div className="space-y-4">
-      <div>
-        <label htmlFor="profession-search" className="mb-2 block text-sm font-medium text-zinc-700">
-          Berufe durchsuchen
-        </label>
-        <input
-          id="profession-search"
-          type="search"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            // Navigate to first page when searching
-            if (e.target.value.trim()) {
-              router.push(buildPageUrl(1, e.target.value.trim()));
-            } else {
-              router.push(buildPageUrl(1));
-            }
-          }}
-          placeholder="Titel, Untertitel, Berufsbild oder Status suchen…"
-          className="w-full rounded-lg border border-zinc-300 px-3 py-2"
-        />
-        {query && (
-          <p className="mt-2 text-sm text-zinc-600">
-            {filtered.length} von {professions.length} Berufen auf dieser Seite gefunden
-          </p>
-        )}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="profession-search" className="mb-2 block text-sm font-medium text-zinc-700">
+            Berufe durchsuchen
+          </label>
+          <input
+            id="profession-search"
+            type="search"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              // Navigate to first page when searching
+              if (e.target.value.trim()) {
+                router.push(buildPageUrl(1, e.target.value.trim(), regeneratedFilter));
+              } else {
+                router.push(buildPageUrl(1, undefined, regeneratedFilter));
+              }
+            }}
+            placeholder="Titel, Untertitel, Berufsbild oder Status suchen…"
+            className="w-full rounded-lg border border-zinc-300 px-3 py-2"
+          />
+          {query && (
+            <p className="mt-2 text-sm text-zinc-600">
+              {filtered.length} von {professions.length} Berufen auf dieser Seite gefunden
+            </p>
+          )}
+        </div>
+        <div>
+          <label htmlFor="regenerated-filter" className="mb-2 block text-sm font-medium text-zinc-700">
+            Content-Generierung
+          </label>
+          <select
+            id="regenerated-filter"
+            value={regeneratedFilter || "all"}
+            onChange={(e) => handleRegeneratedFilterChange(e.target.value === "all" ? "" : e.target.value)}
+            className="w-full rounded-lg border border-zinc-300 px-3 py-2"
+          >
+            <option value="all">Alle Berufe</option>
+            <option value="yes">Bereits neu generiert</option>
+            <option value="no">Noch nicht generiert</option>
+          </select>
+        </div>
       </div>
       <div className="overflow-hidden rounded-lg border">
         <table className="min-w-full text-left text-sm">
@@ -155,6 +190,11 @@ export default function ProfessionsTable({
                         <option value="PUBLISHED">Veröffentlicht</option>
                       </select>
                     </form>
+                    {p.contentRegeneratedAt && (
+                      <p className="mt-1 text-xs text-green-600">
+                        Generiert: {new Date(p.contentRegeneratedAt).toLocaleDateString("de-DE")}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -189,7 +229,7 @@ export default function ProfessionsTable({
           <div className="flex items-center gap-2">
             {currentPage > 1 && (
               <Link
-                href={buildPageUrl(currentPage - 1, query || undefined)}
+                href={buildPageUrl(currentPage - 1, query || undefined, regeneratedFilter)}
                 className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50"
               >
                 Zurück
@@ -209,7 +249,7 @@ export default function ProfessionsTable({
               return (
                 <Link
                   key={pageNum}
-                  href={buildPageUrl(pageNum, query || undefined)}
+                  href={buildPageUrl(pageNum, query || undefined, regeneratedFilter)}
                   className={`rounded border px-3 py-1 text-sm ${
                     pageNum === currentPage
                       ? "bg-zinc-900 text-white border-zinc-900"
@@ -222,7 +262,7 @@ export default function ProfessionsTable({
             })}
             {currentPage < totalPages && (
               <Link
-                href={buildPageUrl(currentPage + 1, query || undefined)}
+                href={buildPageUrl(currentPage + 1, query || undefined, regeneratedFilter)}
                 className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50"
               >
                 Weiter
