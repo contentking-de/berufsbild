@@ -117,7 +117,7 @@ export default async function ArticlePage({ params }: Params) {
   const others = await prisma.article.findMany({
     where: { status: "PUBLISHED", NOT: { slug } },
     orderBy: [{ publishedAt: "desc" }],
-    select: { slug: true, title: true, publishedAt: true },
+    select: { slug: true, title: true, publishedAt: true, coverImageUrl: true },
     take: 100,
   });
   // TOC aus Artikel-Content generieren
@@ -165,6 +165,7 @@ export default async function ArticlePage({ params }: Params) {
               slug: o.slug,
               title: o.title,
               publishedAt: o.publishedAt ? o.publishedAt.toISOString() : null,
+              coverImageUrl: o.coverImageUrl ?? null,
             }))}
           />
         </div>

@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useMemo, useState } from "react";
 
 type SidebarArticle = {
   slug: string;
   title: string;
   publishedAt?: string | null;
+  coverImageUrl?: string | null;
 };
 
 type TocItem = { id: string; text: string; level: 2 | 3 };
@@ -68,13 +70,26 @@ export default function MagazineSidebar({
           ) : (
             filtered.map((a) => (
               <li key={a.slug} className="p-3">
-                <Link href={`/magazin/${a.slug}`} className="group block">
-                  <p className="text-sm font-medium group-hover:underline">{a.title}</p>
-                  {a.publishedAt ? (
-                    <p className="mt-1 text-xs text-zinc-500">
-                      {new Date(a.publishedAt).toLocaleDateString("de-DE")}
-                    </p>
+                <Link href={`/magazin/${a.slug}`} className="group flex gap-3">
+                  {a.coverImageUrl ? (
+                    <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded border border-zinc-200">
+                      <Image
+                        src={a.coverImageUrl}
+                        alt={a.title}
+                        fill
+                        className="object-cover transition-transform group-hover:scale-105"
+                        sizes="64px"
+                      />
+                    </div>
                   ) : null}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium group-hover:underline">{a.title}</p>
+                    {a.publishedAt ? (
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {new Date(a.publishedAt).toLocaleDateString("de-DE")}
+                      </p>
+                    ) : null}
+                  </div>
                 </Link>
               </li>
             ))
