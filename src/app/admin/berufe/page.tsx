@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import ImportForm from "./ImportForm";
+import ProfessionsTable from "./ProfessionsTable";
 import { revalidatePath } from "next/cache";
 
 export const dynamic = "force-dynamic";
@@ -41,11 +42,33 @@ async function deleteProfession(formData: FormData) {
   revalidatePath("/admin/berufe");
 }
 
-export default async function AdminProfessionsPage() {
-  const professions = await prisma.profession.findMany({
-    orderBy: [{ updatedAt: "desc" }],
-    take: 100,
-  });
+type Props = {
+  searchParams: Promise<{ page?: string; q?: string }>;
+};
+
+export default async function AdminProfessionsPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page || "1", 10));
+  const pageSize = 50;
+  const skip = (page - 1) * pageSize;
+
+  const [professions, total] = await Promise.all([
+    prisma.profession.findMany({
+      orderBy: [{ updatedAt: "desc" }],
+      select: {
+        id: true,
+        title: true,
+        subtitle: true,
+        status: true,
+        berufsbild: true,
+      },
+      skip,
+      take: pageSize,
+    }),
+    prisma.profession.count(),
+  ]);
+
+  const totalPages = Math.ceil(total / pageSize);
   return (
     <div className="space-y-10">
       <section>
@@ -78,68 +101,18 @@ export default async function AdminProfessionsPage() {
 
       <section>
         <h2 className="text-lg font-medium">Letzte Änderungen</h2>
-        <div className="mt-4 overflow-hidden rounded-lg border">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-zinc-50">
-              <tr className="text-zinc-600">
-                <th className="px-4 py-2">Titel</th>
-                <th className="px-4 py-2">Untertitel</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Aktionen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {professions.map((p) => (
-                <tr key={p.id} className="border-t">
-                  <td className="px-4 py-2">
-                    <form action={updateProfession} className="flex items-center gap-2">
-                      <input type="hidden" name="id" value={p.id} />
-                      <input
-                        name="title"
-                        defaultValue={p.title}
-                        className="w-full rounded border border-zinc-300 px-2 py-1"
-                      />
-                  </form>
-                  </td>
-                  <td className="px-4 py-2">
-                    <form action={updateProfession}>
-                      <input type="hidden" name="id" value={p.id} />
-                      <input
-                        name="subtitle"
-                        defaultValue={p.subtitle ?? ""}
-                        className="w-full rounded border border-zinc-300 px-2 py-1"
-                      />
-                    </form>
-                  </td>
-                  <td className="px-4 py-2">
-                    <form action={updateProfession}>
-                      <input type="hidden" name="id" value={p.id} />
-                      <select
-                        name="status"
-                        defaultValue={p.status}
-                        className="rounded border border-zinc-300 px-2 py-1"
-                      >
-                        <option value="DRAFT">Entwurf</option>
-                        <option value="PUBLISHED">Veröffentlicht</option>
-                      </select>
-                    </form>
-                  </td>
-                  <td className="px-4 py-2">
-                    <div className="flex items-center gap-2">
-                      <form action={updateProfession}>
-                        <input type="hidden" name="id" value={p.id} />
-                        <button className="rounded border px-3 py-1">Speichern</button>
-                      </form>
-                      <form action={deleteProfession}>
-                        <input type="hidden" name="id" value={p.id} />
-                        <button className="rounded border px-3 py-1 text-red-600">Löschen</button>
-                      </form>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <p className="mt-1 text-sm text-zinc-600">
+          Zeige {skip + 1}–{Math.min(skip + pageSize, total)} von {total} Berufen
+        </p>
+        <div className="mt-4">
+          <ProfessionsTable
+            professions={professions}
+            updateProfession={updateProfession}
+            deleteProfession={deleteProfession}
+            currentPage={page}
+            totalPages={totalPages}
+            total={total}
+          />
         </div>
       </section>
     </div>

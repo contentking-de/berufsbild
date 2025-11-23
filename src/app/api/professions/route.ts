@@ -17,6 +17,7 @@ export async function GET(req: Request) {
           OR: [
             { title: { contains: q, mode: "insensitive" as const } },
             { subtitle: { contains: q, mode: "insensitive" as const } },
+            { berufsbild: { contains: q, mode: "insensitive" as const } },
             { content: { contains: q, mode: "insensitive" as const } },
           ],
         }

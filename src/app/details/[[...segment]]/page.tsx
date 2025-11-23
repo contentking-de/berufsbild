@@ -165,6 +165,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
             OR: [
               { title: { contains: query, mode: "insensitive" as const } },
               { subtitle: { contains: query, mode: "insensitive" as const } },
+              { berufsbild: { contains: query, mode: "insensitive" as const } },
             ],
           }
         : { status: "PUBLISHED" as const };
