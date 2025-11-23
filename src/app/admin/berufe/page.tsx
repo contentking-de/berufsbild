@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import ImportForm from "./ImportForm";
 import ProfessionsTable from "./ProfessionsTable";
+import BatchGenerateButton from "./BatchGenerateButton";
 import { revalidatePath } from "next/cache";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +98,10 @@ export default async function AdminProfessionsPage({ searchParams }: Props) {
           />
           <button className="rounded-lg bg-zinc-900 px-4 py-2 text-white">Anlegen</button>
         </form>
+      </section>
+
+      <section>
+        <BatchGenerateButton />
       </section>
 
       <section>

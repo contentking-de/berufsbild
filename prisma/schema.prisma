@@ -104,6 +104,7 @@ model Profession {
   descriptionFinal         String? @db.Text @map("description FINAL")
   titleFinal               String? @map("Title FINAL")
   kidbFinal                String? @map("KIDB final")
+  contentRegeneratedAt     DateTime? @map("content_regenerated_at")
 
   @@index([alphabeticalKey])
   @@index([status, updatedAt])

@@ -4,6 +4,22 @@ import OpenAI from "openai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // 60 Sekunden (Maximum für Vercel Pro Plan)
+
+// In-Memory Job State (für Production sollte man Redis oder eine DB verwenden)
+let jobState: {
+  running: boolean;
+  processed: number;
+  total: number;
+  errors: number;
+  current?: string;
+  startedAt?: Date;
+} = {
+  running: false,
+  processed: 0,
+  total: 0,
+  errors: 0,
+};
 
 function stripHtml(html: string): string {
   return html
@@ -35,33 +51,20 @@ function removeRepeatedTitleAtStart(html: string, title: string): string {
   return html;
 }
 
-export async function POST(req: NextRequest) {
+async function generateContentForProfession(
+  client: OpenAI,
+  profession: { id: string; title: string; berufsbild: string | null },
+): Promise<boolean> {
   try {
-    const form = await req.formData();
-    const id = form.get("id")?.toString();
-    const title = form.get("title")?.toString()?.trim();
-    const berufsbild = form.get("berufsbild")?.toString()?.trim();
-
-    if (!id || !title) {
-      return NextResponse.json({ error: "id und title erforderlich" }, { status: 400 });
-    }
-
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: "OPENAI_API_KEY fehlt" }, { status: 500 });
-    }
-
-    const client = new OpenAI({ apiKey });
-
     const system = `Du bist ein Redakteur für eine deutschsprachige Website für Berufsorientierung.
 Schreibe konsequent in DU-Form, verständlich, motivierend und präzise – aber inhaltlich tief.
 Liefere reines HTML ohne <html> oder <body>; KEINE Markdown-Codeblöcke (keine \`\`\`), nur pures HTML.
 Strukturiere sauber mit <h2>/<h3>, Absätzen und Listen.
 Ziel: Hohe Detailtiefe, Praxisnähe, Beispiele und konkrete Informationen.`;
 
-    const berufsbildText = berufsbild ? `Berufsbild: ${berufsbild}` : "";
+    const berufsbildText = profession.berufsbild ? `Berufsbild: ${profession.berufsbild}` : "";
     const user = `Erstelle eine SEHR AUSFÜHRLICHE, klar gegliederte Berufsbeschreibung (mindestens 2000–2500 Wörter) für:
-„${title}“
+„${profession.title}“
 ${berufsbildText ? berufsbildText + "\n" : ""}
 
 WICHTIG: Verwende EXAKT folgende Struktur mit diesen Überschriften (als <h2>):
@@ -136,28 +139,129 @@ Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
 
     let html = completion.choices[0]?.message?.content?.trim() || "";
     if (!html) {
-      return NextResponse.json({ error: "Kein Inhalt generiert" }, { status: 500 });
+      return false;
     }
-    // Entferne umschließende Markdown-Codefences (```html ... ```) falls vorhanden
+
+    // Entferne umschließende Markdown-Codefences
     if (html.startsWith("```")) {
       html = html.replace(/^```[a-zA-Z0-9]*\s*/i, "").replace(/\s*```$/i, "").trim();
     }
 
     // Entferne evtl. wiederholten Titel als erste Überschrift
-    html = removeRepeatedTitleAtStart(html, title);
+    html = removeRepeatedTitleAtStart(html, profession.title);
 
     await prisma.profession.update({
-      where: { id },
+      where: { id: profession.id },
       data: {
         content: html,
         contentRegeneratedAt: new Date(),
       },
     });
 
-    return NextResponse.json({ ok: true, length: html.length });
-  } catch (e: any) {
-    console.error(e);
-    return NextResponse.json({ error: e?.message ?? "Fehler bei der Generierung" }, { status: 500 });
+    return true;
+  } catch (error) {
+    console.error(`Fehler bei Beruf ${profession.id}:`, error);
+    return false;
   }
+}
+
+async function runBatchJob() {
+  if (jobState.running) {
+    return;
+  }
+
+  jobState.running = true;
+  jobState.processed = 0;
+  jobState.errors = 0;
+  jobState.startedAt = new Date();
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    jobState.running = false;
+    return;
+  }
+
+  const client = new OpenAI({ apiKey });
+
+  try {
+    // Alle Berufe laden, die noch nicht neu generiert wurden
+    const professions = await prisma.profession.findMany({
+      where: {
+        contentRegeneratedAt: null,
+      },
+      select: {
+        id: true,
+        title: true,
+        berufsbild: true,
+      },
+      orderBy: [{ updatedAt: "desc" }],
+    });
+
+    jobState.total = professions.length;
+
+    // Batch-Verarbeitung mit Rate-Limiting (2 Requests pro Sekunde)
+    const batchSize = 2;
+    const delayBetweenBatches = 1000; // 1 Sekunde
+
+    for (let i = 0; i < professions.length; i += batchSize) {
+      if (!jobState.running) break; // Möglichkeit zum Stoppen
+
+      const batch = professions.slice(i, i + batchSize);
+      const promises = batch.map((profession) => {
+        jobState.current = profession.title;
+        return generateContentForProfession(client, profession).then((success) => {
+          if (success) {
+            jobState.processed++;
+          } else {
+            jobState.errors++;
+          }
+        });
+      });
+
+      await Promise.all(promises);
+
+      // Rate-Limiting: Warte zwischen Batches
+      if (i + batchSize < professions.length) {
+        await new Promise((resolve) => setTimeout(resolve, delayBetweenBatches));
+      }
+    }
+  } catch (error) {
+    console.error("Batch-Job Fehler:", error);
+    jobState.errors++;
+  } finally {
+    jobState.running = false;
+    jobState.current = undefined;
+  }
+}
+
+export async function POST(req: NextRequest) {
+  // Starte den Job im Hintergrund (nicht await!)
+  if (!jobState.running) {
+    runBatchJob().catch((error) => {
+      console.error("Batch-Job Fehler:", error);
+      jobState.running = false;
+    });
+    return NextResponse.json({ ok: true, message: "Batch-Job gestartet" });
+  } else {
+    return NextResponse.json({ ok: false, message: "Batch-Job läuft bereits" }, { status: 400 });
+  }
+}
+
+export async function GET(req: NextRequest) {
+  return NextResponse.json({
+    running: jobState.running,
+    processed: jobState.processed,
+    total: jobState.total,
+    errors: jobState.errors,
+    current: jobState.current,
+    startedAt: jobState.startedAt?.toISOString(),
+    progress: jobState.total > 0 ? Math.round((jobState.processed / jobState.total) * 100) : 0,
+  });
+}
+
+export async function DELETE(req: NextRequest) {
+  // Stoppe den Job
+  jobState.running = false;
+  return NextResponse.json({ ok: true, message: "Batch-Job gestoppt" });
 }
 
