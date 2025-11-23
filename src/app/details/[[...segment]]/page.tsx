@@ -140,8 +140,9 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
     },
   });
   if (!profession || profession.status !== "PUBLISHED") return {};
+  const title = (profession.titleFinal ?? profession.title ?? "").trim();
   return {
-    title: profession.titleFinal ?? profession.title ?? undefined,
+    title: title || undefined,
     description: profession.descriptionFinal ?? undefined,
   };
 }

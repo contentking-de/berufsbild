@@ -6,6 +6,8 @@ import MagazineGrid from "@/components/magazin/MagazineGrid";
 
 export const metadata: Metadata = {
   title: "Berufsbilder Datenbank – Berufe von A-Z suchen und finden",
+  description:
+    "berufsbild.com - über 18.000 Berufsbilder, die Dir die Berufswahl einfacher machen. Inklusive Berufsratgeber und Magazin.",
 };
 
 export default async function Home() {

@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import PerfMeasureGuard from "@/components/PerfMeasureGuard";
 import CookieConsent from "@/components/CookieConsent";
+import { CanonicalLink } from "@/components/CanonicalLink";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,6 +40,7 @@ export default function RootLayout({
       <head>
         <meta name="color-scheme" content="light" />
         <meta name="supported-color-schemes" content="light" />
+        <CanonicalLink />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-zinc-900`}>
         <PerfMeasureGuard />
