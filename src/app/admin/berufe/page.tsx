@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import ProfessionsTable from "./ProfessionsTable";
 import BatchGenerateButton from "./BatchGenerateButton";
+import BulkCreateForm from "./BulkCreateForm";
 import { revalidatePath } from "next/cache";
 import OpenAI from "openai";
 
@@ -93,6 +94,203 @@ async function createProfession(formData: FormData) {
     console.error("Fehler beim Erstellen des Berufs:", error);
     throw error;
   }
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeText(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function removeRepeatedTitleAtStart(html: string, title: string): string {
+  const re = /^\s*<(h1|h2)[^>]*>([\s\S]{0,200}?)<\/\1>/i;
+  const m = html.match(re);
+  if (!m) return html;
+  const headingText = normalizeText(stripHtml(m[2] || ""));
+  const titleNorm = normalizeText(title);
+  if (headingText === titleNorm || headingText.startsWith(titleNorm)) {
+    return html.replace(re, "").trimStart();
+  }
+  return html;
+}
+
+async function generateContentForProfession(
+  client: OpenAI,
+  title: string,
+  berufsbild: string | null
+): Promise<string> {
+  const system = `Du bist ein Redakteur für eine deutschsprachige Website für Berufsorientierung.
+Schreibe konsequent in DU-Form, verständlich, motivierend und präzise – aber inhaltlich tief.
+Liefere reines HTML ohne <html> oder <body>; KEINE Markdown-Codeblöcke (keine \`\`\`), nur pures HTML.
+Strukturiere sauber mit <h2>/<h3>, Absätzen und Listen.
+Ziel: Hohe Detailtiefe, Praxisnähe, Beispiele und konkrete Informationen.`;
+
+  const berufsbildText = berufsbild ? `Berufsbild: ${berufsbild}` : "";
+  const user = `Erstelle eine SEHR AUSFÜHRLICHE, klar gegliederte Berufsbeschreibung (mindestens 2000–2500 Wörter) für:
+„${title}"
+${berufsbildText ? berufsbildText + "\n" : ""}
+
+WICHTIG: Verwende EXAKT folgende Struktur mit diesen Überschriften (als <h2>):
+
+1. <h2>Überblick über das Berufsbild: [Berufsname]</h2>
+   - Einleitender Absatz, der das Berufsbild vorstellt und seine Bedeutung erklärt
+   - 2-3 Absätze mit Hintergrundinformationen, Rolle und Relevanz des Berufs
+
+2. <h2>Voraussetzungen: Ausbildung und Studium</h2>
+   - Welche Ausbildungen/Studiengänge führen zu diesem Beruf?
+   - Dauer, Zugangsvoraussetzungen, Alternativen
+   - Spezialisierungen und Weiterbildungen
+
+3. <h2>Typische Aufgaben eines [Berufsname im Genitiv]</h2>
+   - Detaillierte Auflistung der Hauptaufgaben
+   - Tägliche Arbeitsabläufe, Projekte, Verantwortlichkeiten
+   - Unterschiedliche Arbeitsbereiche/Branchen
+
+4. <h2>Gehaltserwartungen</h2>
+   - Einstiegsgehalt, Durchschnittsgehalt, Spitzengehälter
+   - Regionale Unterschiede
+   - Faktoren, die das Gehalt beeinflussen
+
+5. <h2>Karrierechancen</h2>
+   - Aufstiegsmöglichkeiten, Führungspositionen
+   - Spezialisierungsmöglichkeiten
+   - Branchenwechsel, Selbständigkeit
+
+6. <h2>Anforderungen an die Stelle</h2>
+   - Fachliche Kompetenzen
+   - Soft Skills
+   - Persönliche Eigenschaften
+   - Formale Qualifikationen
+
+7. <h2>Zukunftsaussichten</h2>
+   - Marktentwicklung, Nachfrage
+   - Technologische Einflüsse
+   - Trends und Entwicklungen
+
+8. <h2>Fazit</h2>
+   - Zusammenfassung, für wen der Beruf geeignet ist
+   - Ausblick
+
+9. <h3>Häufig gestellte Fragen zum Beruf [Berufsname]</h3>
+   - 6-10 Fragen als <details><summary>Frage</summary><p>Antwort</p></details>
+   - Direkt darunter ein JSON-LD Block (Schema.org FAQPage) mit denselben Q&As
+
+10. <h3>Mögliche Synonyme</h3>
+    - Liste mit <ul><li>Synonym 1</li><li>Synonym 2</li>...</ul>
+    - 3-5 verwandte Berufsbezeichnungen
+
+11. <h3>Kategorisierung</h3>
+    - Fett gedruckt: <strong>Kategorie1, Kategorie2, Kategorie3, ...</strong>
+    - 4-6 relevante Kategorien (z.B. Branche, Fachbereich, Tätigkeitsfeld)
+
+Rahmenbedingungen:
+- Zielgruppe: Schüler:innen & Student:innen, Ansprache: DU
+- Verwende KEINEN <h1>
+- Nutze normale Absätze <p> für Text
+- Reines HTML ohne <html>/<body> und OHNE Markdown-Codefences (\`\`\`)
+
+Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
+
+  const completion = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    temperature: 0.7,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  });
+
+  let html = completion.choices[0]?.message?.content?.trim() || "";
+  if (!html) {
+    throw new Error("Kein Inhalt generiert");
+  }
+
+  // Entferne umschließende Markdown-Codefences
+  if (html.startsWith("```")) {
+    html = html.replace(/^```[a-zA-Z0-9]*\s*/i, "").replace(/\s*```$/i, "").trim();
+  }
+
+  // Entferne evtl. wiederholten Titel als erste Überschrift
+  html = removeRepeatedTitleAtStart(html, title);
+
+  return html;
+}
+
+async function createMultipleProfessions(berufsbilder: string[]) {
+  "use server";
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY fehlt");
+  }
+
+  const client = new OpenAI({ apiKey });
+  const results: Array<{ berufsbild: string; success: boolean; id?: string; error?: string }> = [];
+
+  for (const berufsbild of berufsbilder) {
+    const trimmedBerufsbild = berufsbild.trim();
+    if (!trimmedBerufsbild) continue;
+
+    try {
+      // 1. Metadaten generieren
+      const metadata = await generateMetadata(trimmedBerufsbild);
+
+      // 2. Profession erstellen mit Status PUBLISHED
+      const key = trimmedBerufsbild[0]?.toUpperCase();
+      const alphabeticalKey = /[A-Z]/.test(key) ? key : "#";
+
+      const profession = await prisma.profession.create({
+        data: {
+          title: metadata.title,
+          subtitle: metadata.subtitle || null,
+          slug: metadata.slug,
+          berufsbild: trimmedBerufsbild,
+          alphabeticalKey,
+          status: "PUBLISHED",
+        },
+      });
+
+      // 3. Content generieren
+      try {
+        const content = await generateContentForProfession(client, metadata.title, trimmedBerufsbild);
+        
+        await prisma.profession.update({
+          where: { id: profession.id },
+          data: {
+            content,
+            contentRegeneratedAt: new Date(),
+          },
+        });
+      } catch (contentError: any) {
+        console.error(`Content-Generierung fehlgeschlagen für ${trimmedBerufsbild}:`, contentError);
+        // Profession wurde erstellt, aber Content-Generierung fehlgeschlagen
+        // Das ist ok, Content kann später generiert werden
+      }
+
+      results.push({ berufsbild: trimmedBerufsbild, success: true, id: profession.id });
+    } catch (error: any) {
+      console.error(`Fehler beim Erstellen von ${trimmedBerufsbild}:`, error);
+      results.push({
+        berufsbild: trimmedBerufsbild,
+        success: false,
+        error: error?.message || "Unbekannter Fehler",
+      });
+    }
+  }
+
+  revalidatePath("/admin/berufe");
+  return results;
 }
 
 async function updateProfession(formData: FormData) {
@@ -248,6 +446,16 @@ export default async function AdminProfessionsPage({ searchParams }: Props) {
           />
           <button className="rounded-lg bg-zinc-900 px-4 py-2 text-white">Anlegen</button>
         </form>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-medium">Mehrere Berufsbilder auf einmal anlegen</h2>
+        <p className="mt-1 text-sm text-zinc-600">
+          Geben Sie mehrere Berufsbilder ein (eines pro Zeile). Alle werden automatisch erstellt, mit KI-Content generiert und veröffentlicht.
+        </p>
+        <div className="mt-4">
+          <BulkCreateForm createMultipleProfessions={createMultipleProfessions} />
+        </div>
       </section>
 
       <section>
