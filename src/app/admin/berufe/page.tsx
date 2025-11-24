@@ -64,13 +64,17 @@ export default async function AdminProfessionsPage({ searchParams }: Props) {
         : {};
 
   // Suchfilter: Suche über alle Felder
+  // Für status (Enum) prüfen wir, ob der Suchbegriff einem Enum-Wert entspricht
   const searchWhere = searchQuery
     ? {
         OR: [
           { title: { contains: searchQuery, mode: "insensitive" as const } },
           { subtitle: { contains: searchQuery, mode: "insensitive" as const } },
           { berufsbild: { contains: searchQuery, mode: "insensitive" as const } },
-          { status: { contains: searchQuery, mode: "insensitive" as const } },
+          // Status-Suche: Prüfe, ob der Suchbegriff einem Enum-Wert entspricht
+          ...(searchQuery.toUpperCase() === "DRAFT" || searchQuery.toUpperCase() === "PUBLISHED"
+            ? [{ status: searchQuery.toUpperCase() as "DRAFT" | "PUBLISHED" }]
+            : []),
         ],
       }
     : {};
