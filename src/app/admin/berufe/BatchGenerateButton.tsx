@@ -2,6 +2,14 @@
 
 import { useState, useEffect } from "react";
 
+type ErrorLog = {
+  professionId: string;
+  title: string;
+  error: string;
+  stack?: string;
+  timestamp: string;
+};
+
 type JobStatus = {
   running: boolean;
   processed: number;
@@ -10,6 +18,7 @@ type JobStatus = {
   current?: string;
   startedAt?: string;
   progress: number;
+  errorLogs?: ErrorLog[];
 };
 
 export default function BatchGenerateButton() {
@@ -98,6 +107,28 @@ export default function BatchGenerateButton() {
                   <span className="font-medium text-red-600">{status.errors}</span>
                 </div>
               )}
+              {status.errorLogs && status.errorLogs.length > 0 && (
+                <div className="mt-2 max-h-48 overflow-y-auto rounded border border-red-200 bg-red-50 p-2">
+                  <p className="mb-1 text-xs font-medium text-red-800">Fehler-Details:</p>
+                  <div className="space-y-1">
+                    {status.errorLogs.map((log, idx) => (
+                      <details key={idx} className="text-xs">
+                        <summary className="cursor-pointer text-red-700 hover:text-red-900">
+                          {log.title} - {new Date(log.timestamp).toLocaleTimeString("de-DE")}
+                        </summary>
+                        <div className="mt-1 rounded bg-white p-2 font-mono text-xs text-red-900">
+                          <div className="font-semibold">{log.error}</div>
+                          {log.stack && (
+                            <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] text-red-700">
+                              {log.stack}
+                            </pre>
+                          )}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-zinc-200">
                 <div
                   className="h-full bg-blue-600 transition-all duration-300"
@@ -128,6 +159,28 @@ export default function BatchGenerateButton() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-zinc-700">Fehler:</span>
                   <span className="font-medium text-red-600">{status.errors}</span>
+                </div>
+              )}
+              {status.errorLogs && status.errorLogs.length > 0 && (
+                <div className="mt-2 max-h-64 overflow-y-auto rounded border border-red-200 bg-red-50 p-2">
+                  <p className="mb-1 text-xs font-medium text-red-800">Fehler-Details:</p>
+                  <div className="space-y-1">
+                    {status.errorLogs.map((log, idx) => (
+                      <details key={idx} className="text-xs">
+                        <summary className="cursor-pointer text-red-700 hover:text-red-900">
+                          {log.title} - {new Date(log.timestamp).toLocaleTimeString("de-DE")}
+                        </summary>
+                        <div className="mt-1 rounded bg-white p-2 font-mono text-xs text-red-900">
+                          <div className="font-semibold">{log.error}</div>
+                          {log.stack && (
+                            <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] text-red-700">
+                              {log.stack}
+                            </pre>
+                          )}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
                 </div>
               )}
             </>

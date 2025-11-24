@@ -139,6 +139,7 @@ model BatchJob {
   current     String?
   startedAt   DateTime?
   updatedAt   DateTime @updatedAt
+  errorLogs   Json?    @default("[]") // Array von Fehler-Objekten: [{professionId, title, error, timestamp}]
 
   @@map("batch_job")
 }

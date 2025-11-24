@@ -19,6 +19,7 @@ async function getJobState() {
     current: null,
     startedAt: null,
     updatedAt: new Date(),
+    errorLogs: [],
   };
 }
 
@@ -29,6 +30,7 @@ async function updateJobState(data: {
   errors?: number;
   current?: string | null;
   startedAt?: Date | null;
+  errorLogs?: any;
 }) {
   await prisma.batchJob.upsert({
     where: { id: "batch-job" },
@@ -40,12 +42,30 @@ async function updateJobState(data: {
       errors: data.errors ?? 0,
       current: data.current ?? null,
       startedAt: data.startedAt ?? null,
+      errorLogs: data.errorLogs ?? [],
     },
     update: {
       ...data,
       updatedAt: new Date(),
     },
   });
+}
+
+async function addErrorLog(professionId: string, title: string, error: any) {
+  const currentState = await getJobState();
+  const errorLogs = (currentState.errorLogs as any[]) || [];
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const errorStack = error instanceof Error ? error.stack : undefined;
+  
+  errorLogs.push({
+    professionId,
+    title,
+    error: errorMessage,
+    stack: errorStack,
+    timestamp: new Date().toISOString(),
+  });
+  
+  await updateJobState({ errorLogs });
 }
 
 function stripHtml(html: string): string {
@@ -196,6 +216,8 @@ Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
     if (error instanceof Error) {
       console.error(`[Batch] Fehler-Details: ${error.message}, Stack: ${error.stack}`);
     }
+    // Fehler-Details speichern
+    await addErrorLog(profession.id, profession.title, error);
     return false;
   }
 }
@@ -220,6 +242,7 @@ async function runBatchJob() {
     errors: 0,
     startedAt: new Date(),
     current: null,
+    errorLogs: [],
   });
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -336,6 +359,7 @@ export async function GET(req: NextRequest) {
     current: state.current,
     startedAt: state.startedAt?.toISOString(),
     progress: state.total > 0 ? Math.round((state.processed / state.total) * 100) : 0,
+    errorLogs: state.errorLogs || [],
   });
 }
 
