@@ -273,47 +273,42 @@ async function runBatchJob() {
     }
     console.log(`[Batch] ${professions.length} Berufe gefunden, die generiert werden müssen`);
 
-    // Batch-Verarbeitung mit Rate-Limiting (2 Requests pro Sekunde)
-    const batchSize = 2;
-    const delayBetweenBatches = 1000; // 1 Sekunde
+    // Sequenzielle Verarbeitung (1 Request nach dem anderen) um DB-Connection-Limits zu vermeiden
+    const delayBetweenRequests = 2000; // 2 Sekunden zwischen Requests
 
-    console.log(`[Batch] Starte Verarbeitung von ${professions.length} Berufen in Batches von ${batchSize}`);
+    console.log(`[Batch] Starte sequenzielle Verarbeitung von ${professions.length} Berufen`);
 
-    for (let i = 0; i < professions.length; i += batchSize) {
+    for (let i = 0; i < professions.length; i++) {
       const state = await getJobState();
       if (!state.running) {
         console.log(`[Batch] Job wurde gestoppt bei Index ${i}`);
         break; // Möglichkeit zum Stoppen
       }
 
-      const batch = professions.slice(i, i + batchSize);
-      console.log(`[Batch] Verarbeite Batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(professions.length / batchSize)} (${i + 1}-${Math.min(i + batchSize, professions.length)} von ${professions.length})`);
+      const profession = professions[i];
+      console.log(`[Batch] Verarbeite ${i + 1}/${professions.length}: ${profession.title}`);
 
-      const promises = batch.map((profession) => {
-        return generateContentForProfession(client, profession, async () => {
-          const currentState = await getJobState();
-          const newProcessed = currentState.processed + 1;
-          await updateJobState({
-            processed: newProcessed,
-            current: profession.title,
-          });
-          console.log(`[Batch] Fortschritt: ${newProcessed}/${currentState.total} (${Math.round((newProcessed / currentState.total) * 100)}%)`);
-        }).then(async (success) => {
-          if (!success) {
-            const currentState = await getJobState();
-            await updateJobState({
-              errors: currentState.errors + 1,
-            });
-            console.log(`[Batch] Fehler bei ${profession.title}, Gesamt-Fehler: ${currentState.errors + 1}`);
-          }
+      const success = await generateContentForProfession(client, profession, async () => {
+        const currentState = await getJobState();
+        const newProcessed = currentState.processed + 1;
+        await updateJobState({
+          processed: newProcessed,
+          current: profession.title,
         });
+        console.log(`[Batch] Fortschritt: ${newProcessed}/${currentState.total} (${Math.round((newProcessed / currentState.total) * 100)}%)`);
       });
 
-      await Promise.all(promises);
+      if (!success) {
+        const currentState = await getJobState();
+        await updateJobState({
+          errors: currentState.errors + 1,
+        });
+        console.log(`[Batch] Fehler bei ${profession.title}, Gesamt-Fehler: ${currentState.errors + 1}`);
+      }
 
-      // Rate-Limiting: Warte zwischen Batches
-      if (i + batchSize < professions.length) {
-        await new Promise((resolve) => setTimeout(resolve, delayBetweenBatches));
+      // Rate-Limiting: Warte zwischen Requests (außer beim letzten)
+      if (i < professions.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delayBetweenRequests));
       }
     }
 
