@@ -21,17 +21,41 @@ async function createProfession(formData: FormData) {
 async function updateProfession(formData: FormData) {
   "use server";
   const id = formData.get("id") as string;
-  const title = (formData.get("title") as string)?.trim();
-  const subtitle = (formData.get("subtitle") as string)?.trim();
-  const status = formData.get("status") as "DRAFT" | "PUBLISHED";
   if (!id) return;
-  const key = title?.[0]?.toUpperCase();
-  const alphabeticalKey = title ? (/[A-Z]/.test(key) ? key : "#") : undefined;
-  await prisma.profession.update({
-    where: { id },
-    data: { title, subtitle, status, alphabeticalKey },
-  });
-  revalidatePath("/admin/berufe");
+  
+  // Nur Felder aktualisieren, die tatsächlich vorhanden sind
+  const updateData: {
+    title?: string;
+    subtitle?: string | null;
+    status?: "DRAFT" | "PUBLISHED";
+    alphabeticalKey?: string;
+  } = {};
+  
+  const title = (formData.get("title") as string)?.trim();
+  if (title !== undefined && title !== null) {
+    updateData.title = title;
+    const key = title[0]?.toUpperCase();
+    updateData.alphabeticalKey = /[A-Z]/.test(key) ? key : "#";
+  }
+  
+  const subtitle = (formData.get("subtitle") as string)?.trim();
+  if (subtitle !== undefined) {
+    updateData.subtitle = subtitle || null;
+  }
+  
+  const status = formData.get("status") as "DRAFT" | "PUBLISHED" | null;
+  if (status && (status === "DRAFT" || status === "PUBLISHED")) {
+    updateData.status = status;
+  }
+  
+  // Nur aktualisieren, wenn es Daten gibt
+  if (Object.keys(updateData).length > 0) {
+    await prisma.profession.update({
+      where: { id },
+      data: updateData,
+    });
+    revalidatePath("/admin/berufe");
+  }
 }
 
 async function deleteProfession(formData: FormData) {
