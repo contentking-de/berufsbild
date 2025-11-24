@@ -3,13 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type BulkCreateFormProps = {
-  createMultipleProfessions: (berufsbilder: string[]) => Promise<
-    Array<{ berufsbild: string; success: boolean; id?: string; error?: string }>
-  >;
-};
-
-export default function BulkCreateForm({ createMultipleProfessions }: BulkCreateFormProps) {
+export default function BulkCreateForm() {
   const [berufsbilder, setBerufsbilder] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<
@@ -33,11 +27,25 @@ export default function BulkCreateForm({ createMultipleProfessions }: BulkCreate
     setResults([]);
 
     try {
-      const results = await createMultipleProfessions(lines);
+      const response = await fetch("/api/admin/create-professions-bulk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ berufsbilder: lines }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Fehler beim Erstellen der Berufsbilder");
+      }
+
+      const data = await response.json();
+      const results: Array<{ berufsbild: string; success: boolean; id?: string; error?: string }> = data.results || [];
       setResults(results);
       
-      const successCount = results.filter((r) => r.success).length;
-      const errorCount = results.filter((r) => !r.success).length;
+      const successCount = results.filter((r: { berufsbild: string; success: boolean; id?: string; error?: string }) => r.success).length;
+      const errorCount = results.filter((r: { berufsbild: string; success: boolean; id?: string; error?: string }) => !r.success).length;
       
       if (successCount > 0) {
         router.refresh();
@@ -48,6 +56,7 @@ export default function BulkCreateForm({ createMultipleProfessions }: BulkCreate
         `Fertig!\n\nErfolgreich: ${successCount}\nFehler: ${errorCount}`
       );
     } catch (error: any) {
+      console.error("Fehler:", error);
       alert(`Fehler: ${error?.message || "Unbekannter Fehler"}`);
     } finally {
       setIsProcessing(false);

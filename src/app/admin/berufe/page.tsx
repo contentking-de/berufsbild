@@ -454,7 +454,7 @@ export default async function AdminProfessionsPage({ searchParams }: Props) {
           Geben Sie mehrere Berufsbilder ein (eines pro Zeile). Alle werden automatisch erstellt, mit KI-Content generiert und veröffentlicht.
         </p>
         <div className="mt-4">
-          <BulkCreateForm createMultipleProfessions={createMultipleProfessions} />
+          <BulkCreateForm />
         </div>
       </section>
 
