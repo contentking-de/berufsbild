@@ -38,7 +38,7 @@ export default function BatchGenerateButton() {
   }, []);
 
   async function handleStart() {
-    if (!confirm("Möchtest du wirklich Content für alle Berufe ohne Content generieren? Das kann sehr lange dauern.")) {
+    if (!confirm("Möchtest du wirklich neuen Content für ALLE Berufe generieren? Das überschreibt vorhandenen Content und kann sehr lange dauern.")) {
       return;
     }
     setLoading(true);

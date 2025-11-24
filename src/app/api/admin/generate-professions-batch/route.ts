@@ -55,6 +55,7 @@ async function generateContentForProfession(
   client: OpenAI,
   profession: { id: string; title: string; berufsbild: string | null },
 ): Promise<boolean> {
+  console.log(`[Batch] Starte Generierung für: ${profession.title} (${profession.id})`);
   try {
     const system = `Du bist ein Redakteur für eine deutschsprachige Website für Berufsorientierung.
 Schreibe konsequent in DU-Form, verständlich, motivierend und präzise – aber inhaltlich tief.
@@ -150,7 +151,7 @@ Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
     // Entferne evtl. wiederholten Titel als erste Überschrift
     html = removeRepeatedTitleAtStart(html, profession.title);
 
-    await prisma.profession.update({
+    const updateResult = await prisma.profession.update({
       where: { id: profession.id },
       data: {
         content: html,
@@ -158,18 +159,24 @@ Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
       },
     });
 
+    console.log(`[Batch] Erfolgreich generiert: ${profession.title} (${profession.id}), Content-Länge: ${html.length} Zeichen`);
     return true;
   } catch (error) {
-    console.error(`Fehler bei Beruf ${profession.id}:`, error);
+    console.error(`[Batch] Fehler bei Beruf ${profession.id} (${profession.title}):`, error);
+    if (error instanceof Error) {
+      console.error(`[Batch] Fehler-Details: ${error.message}, Stack: ${error.stack}`);
+    }
     return false;
   }
 }
 
 async function runBatchJob() {
   if (jobState.running) {
+    console.log("[Batch] Job läuft bereits, überspringe Start");
     return;
   }
 
+  console.log("[Batch] Starte Batch-Job...");
   jobState.running = true;
   jobState.processed = 0;
   jobState.errors = 0;
@@ -177,6 +184,7 @@ async function runBatchJob() {
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
+    console.error("[Batch] OPENAI_API_KEY fehlt!");
     jobState.running = false;
     return;
   }
@@ -184,11 +192,9 @@ async function runBatchJob() {
   const client = new OpenAI({ apiKey });
 
   try {
-    // Alle Berufe laden, die noch nicht neu generiert wurden
+    // Alle Berufe laden (auch die mit vorhandenem Content)
+    console.log("[Batch] Lade Berufe aus Datenbank...");
     const professions = await prisma.profession.findMany({
-      where: {
-        contentRegeneratedAt: null,
-      },
       select: {
         id: true,
         title: true,
@@ -198,22 +204,32 @@ async function runBatchJob() {
     });
 
     jobState.total = professions.length;
+    console.log(`[Batch] ${professions.length} Berufe gefunden, die generiert werden müssen`);
 
     // Batch-Verarbeitung mit Rate-Limiting (2 Requests pro Sekunde)
     const batchSize = 2;
     const delayBetweenBatches = 1000; // 1 Sekunde
 
+    console.log(`[Batch] Starte Verarbeitung von ${professions.length} Berufen in Batches von ${batchSize}`);
+
     for (let i = 0; i < professions.length; i += batchSize) {
-      if (!jobState.running) break; // Möglichkeit zum Stoppen
+      if (!jobState.running) {
+        console.log(`[Batch] Job wurde gestoppt bei Index ${i}`);
+        break; // Möglichkeit zum Stoppen
+      }
 
       const batch = professions.slice(i, i + batchSize);
+      console.log(`[Batch] Verarbeite Batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(professions.length / batchSize)} (${i + 1}-${Math.min(i + batchSize, professions.length)} von ${professions.length})`);
+
       const promises = batch.map((profession) => {
         jobState.current = profession.title;
         return generateContentForProfession(client, profession).then((success) => {
           if (success) {
             jobState.processed++;
+            console.log(`[Batch] Fortschritt: ${jobState.processed}/${jobState.total} (${Math.round((jobState.processed / jobState.total) * 100)}%)`);
           } else {
             jobState.errors++;
+            console.log(`[Batch] Fehler bei ${profession.title}, Gesamt-Fehler: ${jobState.errors}`);
           }
         });
       });
@@ -225,12 +241,18 @@ async function runBatchJob() {
         await new Promise((resolve) => setTimeout(resolve, delayBetweenBatches));
       }
     }
+
+    console.log(`[Batch] Job abgeschlossen! Verarbeitet: ${jobState.processed}, Fehler: ${jobState.errors}, Gesamt: ${jobState.total}`);
   } catch (error) {
-    console.error("Batch-Job Fehler:", error);
+    console.error("[Batch] Kritischer Fehler im Batch-Job:", error);
+    if (error instanceof Error) {
+      console.error(`[Batch] Fehler-Details: ${error.message}, Stack: ${error.stack}`);
+    }
     jobState.errors++;
   } finally {
     jobState.running = false;
     jobState.current = undefined;
+    console.log("[Batch] Job-State zurückgesetzt");
   }
 }
 
