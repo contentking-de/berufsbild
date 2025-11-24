@@ -158,7 +158,7 @@ WICHTIG: Verwende EXAKT folgende Struktur mit diesen Überschriften (als <h2>):
    - Ausblick
 
 9. <h3>Häufig gestellte Fragen zum Beruf [Berufsname]</h3>
-   - 6-10 Fragen als <details><summary>Frage</summary>Antwort</details>
+   - 6-10 Fragen als <details><summary>Frage</summary><p>Antwort</p></details>
    - Direkt darunter ein JSON-LD Block (Schema.org FAQPage) mit denselben Q&As
 
 10. <h3>Mögliche Synonyme</h3>

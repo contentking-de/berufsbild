@@ -213,6 +213,10 @@ body {
   gap: 0.6rem;
   position: relative;
 }
+/* Der Text innerhalb der summary beginnt bei padding-left (1rem) */
+.content-body summary > *:first-child {
+  margin-left: 0;
+}
 .content-body summary::-webkit-details-marker { display: none; }
 .content-body summary::after {
   content: "";
@@ -227,14 +231,31 @@ body {
 .content-body details[open] summary::after {
   transform: rotate(45deg);
 }
+/* Alle Inhalte innerhalb von details (außer summary) sollen bündig mit summary-Text sein */
+/* Die summary hat padding: 0.9rem 1rem, also beginnt der Text bei 1rem vom linken Rand */
 .content-body details > *:not(summary) {
-  padding: 0 1rem 1rem 1rem;
-  padding-left: 1rem; /* Bündig mit summary padding (summary hat 0.9rem 1rem) */
+  margin: 0 !important;
+  padding-left: 1rem !important; /* Exakt bündig mit summary padding-left (1rem) */
+  padding-right: 1rem !important;
+  padding-top: 0 !important;
+  padding-bottom: 1rem !important;
   color: #27272a; /* zinc-800 */
 }
-.content-body details > p:not(summary) {
-  margin-left: 0;
-  margin-right: 0;
+/* Spezifische Regel für p-Tags innerhalb von details - überschreibt .content-body p */
+.content-body details > p {
+  margin: 0 !important;
+  padding-left: 1rem !important; /* Exakt bündig mit summary padding-left (1rem) */
+  padding-right: 1rem !important;
+  padding-top: 0 !important;
+  padding-bottom: 1rem !important;
+}
+/* Spezifische Regel für div-Tags innerhalb von details */
+.content-body details > div {
+  margin: 0 !important;
+  padding-left: 1rem !important; /* Exakt bündig mit summary padding-left (1rem) */
+  padding-right: 1rem !important;
+  padding-top: 0 !important;
+  padding-bottom: 1rem !important;
 }
 .content-body details + details {
   margin-top: 0.5rem;
