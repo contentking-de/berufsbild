@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import ImportForm from "./ImportForm";
 import ProfessionsTable from "./ProfessionsTable";
 import BatchGenerateButton from "./BatchGenerateButton";
 import { revalidatePath } from "next/cache";
@@ -106,15 +105,6 @@ export default async function AdminProfessionsPage({ searchParams }: Props) {
   const totalPages = Math.ceil(total / pageSize);
   return (
     <div className="space-y-10">
-      <section>
-        <h2 className="text-lg font-medium">Excel-Import (Berufe)</h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          Lade die Datei <span className="font-mono">.xlsx</span> hoch. Standardmäßig wird das erste Sheet importiert.
-        </p>
-        <div className="mt-4">
-          <ImportForm />
-        </div>
-      </section>
       <section>
         <h2 className="text-lg font-medium">Beruf hinzufügen</h2>
         <form action={createProfession} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
