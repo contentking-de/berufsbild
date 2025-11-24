@@ -241,8 +241,22 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
     const totalCount = await prisma.profession.count({ where: { status: "PUBLISHED" } });
     const formattedCount = new Intl.NumberFormat("de-DE").format(totalCount);
     const letters = alphabeticalBuckets();
+    
+    // Kombiniere Letter-Filter mit Suchfilter (AND-Logik)
+    const where = query.length > 1
+      ? {
+          status: "PUBLISHED" as const,
+          alphabeticalKey: upper,
+          OR: [
+            { title: { contains: query, mode: "insensitive" as const } },
+            { subtitle: { contains: query, mode: "insensitive" as const } },
+            { berufsbild: { contains: query, mode: "insensitive" as const } },
+          ],
+        }
+      : { status: "PUBLISHED" as const, alphabeticalKey: upper };
+    
     const professions = await prisma.profession.findMany({
-      where: { status: "PUBLISHED", alphabeticalKey: upper },
+      where,
       select: { id: true, slug: true, title: true, subtitle: true, alphabeticalKey: true },
       orderBy: [{ title: "asc" }],
     });
@@ -255,6 +269,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
           <form className="w-full max-w-md md:w-auto">
             <input
               name="q"
+              defaultValue={query}
               placeholder="Beruf suchen …"
               className="w-full rounded-lg border border-zinc-300 px-4 py-2 outline-none focus:border-zinc-600"
             />
@@ -274,7 +289,8 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
         </section>
         <div className="mb-8 flex flex-wrap gap-2">
           {letters.map((l) => {
-            const href = l === "#" ? "/details" : `/details/${l.toLowerCase()}`;
+            const baseHref = l === "#" ? "/details" : `/details/${l.toLowerCase()}`;
+            const href = query ? `${baseHref}?q=${encodeURIComponent(query)}` : baseHref;
             return (
               <Link
                 key={l}
