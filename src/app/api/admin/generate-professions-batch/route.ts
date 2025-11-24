@@ -208,9 +208,15 @@ async function runBatchJob() {
   }
 
   console.log("[Batch] Starte Batch-Job...");
+  
+  // Zuerst die Anzahl der Berufe ermitteln, damit total sofort verfügbar ist
+  const totalCount = await prisma.profession.count();
+  console.log(`[Batch] Gefunden: ${totalCount} Berufe insgesamt`);
+  
   await updateJobState({
     running: true,
     processed: 0,
+    total: totalCount,
     errors: 0,
     startedAt: new Date(),
     current: null,
@@ -237,7 +243,11 @@ async function runBatchJob() {
       orderBy: [{ updatedAt: "desc" }],
     });
 
-    await updateJobState({ total: professions.length });
+    // Total sollte bereits gesetzt sein, aber zur Sicherheit nochmal setzen
+    if (professions.length !== totalCount) {
+      console.log(`[Batch] Warnung: Count (${totalCount}) != Array-Länge (${professions.length}), aktualisiere total`);
+      await updateJobState({ total: professions.length });
+    }
     console.log(`[Batch] ${professions.length} Berufe gefunden, die generiert werden müssen`);
 
     // Batch-Verarbeitung mit Rate-Limiting (2 Requests pro Sekunde)
