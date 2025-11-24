@@ -53,14 +53,33 @@ export default async function AdminProfessionsPage({ searchParams }: Props) {
   const pageSize = 50;
   const skip = (page - 1) * pageSize;
   const regeneratedFilter = params.regenerated;
+  const searchQuery = params.q?.trim();
 
   // Filter für contentRegeneratedAt
-  const where =
+  const regeneratedWhere =
     regeneratedFilter === "yes"
       ? { contentRegeneratedAt: { not: null } }
       : regeneratedFilter === "no"
         ? { contentRegeneratedAt: null }
         : {};
+
+  // Suchfilter: Suche über alle Felder
+  const searchWhere = searchQuery
+    ? {
+        OR: [
+          { title: { contains: searchQuery, mode: "insensitive" as const } },
+          { subtitle: { contains: searchQuery, mode: "insensitive" as const } },
+          { berufsbild: { contains: searchQuery, mode: "insensitive" as const } },
+          { status: { contains: searchQuery, mode: "insensitive" as const } },
+        ],
+      }
+    : {};
+
+  // Kombiniere beide Filter
+  const where = {
+    ...regeneratedWhere,
+    ...searchWhere,
+  };
 
   const [professions, total] = await Promise.all([
     prisma.profession.findMany({
@@ -118,7 +137,9 @@ export default async function AdminProfessionsPage({ searchParams }: Props) {
       <section>
         <h2 className="text-lg font-medium">Letzte Änderungen</h2>
         <p className="mt-1 text-sm text-zinc-600">
-          Zeige {skip + 1}–{Math.min(skip + pageSize, total)} von {total} Berufen
+          {searchQuery
+            ? `Zeige ${skip + 1}–${Math.min(skip + pageSize, total)} von ${total} Berufen (Suche: "${searchQuery}")`
+            : `Zeige ${skip + 1}–${Math.min(skip + pageSize, total)} von ${total} Berufen`}
         </p>
         <div className="mt-4">
           <ProfessionsTable
@@ -129,6 +150,7 @@ export default async function AdminProfessionsPage({ searchParams }: Props) {
             totalPages={totalPages}
             total={total}
             regeneratedFilter={regeneratedFilter}
+            searchQuery={searchQuery}
           />
         </div>
       </section>

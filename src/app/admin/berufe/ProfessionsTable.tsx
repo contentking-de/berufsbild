@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -21,6 +21,7 @@ type ProfessionsTableProps = {
   totalPages: number;
   total: number;
   regeneratedFilter?: string;
+  searchQuery?: string;
 };
 
 export default function ProfessionsTable({
@@ -31,9 +32,10 @@ export default function ProfessionsTable({
   totalPages,
   total,
   regeneratedFilter,
+  searchQuery,
 }: ProfessionsTableProps) {
   const searchParams = useSearchParams();
-  const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [query, setQuery] = useState(searchQuery || "");
   const [generating, setGenerating] = useState<string | null>(null);
   const router = useRouter();
 
@@ -57,17 +59,8 @@ export default function ProfessionsTable({
     }
   }
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return professions;
-    return professions.filter(
-      (p) =>
-        p.title.toLowerCase().includes(q) ||
-        p.subtitle?.toLowerCase().includes(q) ||
-        p.berufsbild?.toLowerCase().includes(q) ||
-        p.status.toLowerCase().includes(q),
-    );
-  }, [professions, query]);
+  // Filterung erfolgt jetzt serverseitig, daher verwenden wir die professions direkt
+  const filtered = professions;
 
   function buildPageUrl(page: number, query?: string, regenerated?: string) {
     const params = new URLSearchParams();
@@ -118,7 +111,7 @@ export default function ProfessionsTable({
           />
           {query && (
             <p className="mt-2 text-sm text-zinc-600">
-              {filtered.length} von {professions.length} Berufen auf dieser Seite gefunden
+              {filtered.length} von {total} Berufen gefunden (auf dieser Seite)
             </p>
           )}
         </div>
