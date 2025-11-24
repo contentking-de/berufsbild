@@ -6,20 +6,47 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // 60 Sekunden (Maximum für Vercel Pro Plan)
 
-// In-Memory Job State (für Production sollte man Redis oder eine DB verwenden)
-let jobState: {
-  running: boolean;
-  processed: number;
-  total: number;
-  errors: number;
-  current?: string;
-  startedAt?: Date;
-} = {
-  running: false,
-  processed: 0,
-  total: 0,
-  errors: 0,
-};
+async function getJobState() {
+  const job = await prisma.batchJob.findUnique({
+    where: { id: "batch-job" },
+  });
+  return job || {
+    id: "batch-job",
+    running: false,
+    processed: 0,
+    total: 0,
+    errors: 0,
+    current: null,
+    startedAt: null,
+    updatedAt: new Date(),
+  };
+}
+
+async function updateJobState(data: {
+  running?: boolean;
+  processed?: number;
+  total?: number;
+  errors?: number;
+  current?: string | null;
+  startedAt?: Date | null;
+}) {
+  await prisma.batchJob.upsert({
+    where: { id: "batch-job" },
+    create: {
+      id: "batch-job",
+      running: data.running ?? false,
+      processed: data.processed ?? 0,
+      total: data.total ?? 0,
+      errors: data.errors ?? 0,
+      current: data.current ?? null,
+      startedAt: data.startedAt ?? null,
+    },
+    update: {
+      ...data,
+      updatedAt: new Date(),
+    },
+  });
+}
 
 function stripHtml(html: string): string {
   return html
@@ -54,6 +81,7 @@ function removeRepeatedTitleAtStart(html: string, title: string): string {
 async function generateContentForProfession(
   client: OpenAI,
   profession: { id: string; title: string; berufsbild: string | null },
+  onProgress: () => Promise<void>,
 ): Promise<boolean> {
   console.log(`[Batch] Starte Generierung für: ${profession.title} (${profession.id})`);
   try {
@@ -151,7 +179,7 @@ Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
     // Entferne evtl. wiederholten Titel als erste Überschrift
     html = removeRepeatedTitleAtStart(html, profession.title);
 
-    const updateResult = await prisma.profession.update({
+    await prisma.profession.update({
       where: { id: profession.id },
       data: {
         content: html,
@@ -160,6 +188,8 @@ Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
     });
 
     console.log(`[Batch] Erfolgreich generiert: ${profession.title} (${profession.id}), Content-Länge: ${html.length} Zeichen`);
+    // Progress wird nach erfolgreichem Update aktualisiert
+    await onProgress();
     return true;
   } catch (error) {
     console.error(`[Batch] Fehler bei Beruf ${profession.id} (${profession.title}):`, error);
@@ -171,21 +201,25 @@ Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
 }
 
 async function runBatchJob() {
-  if (jobState.running) {
+  const currentState = await getJobState();
+  if (currentState.running) {
     console.log("[Batch] Job läuft bereits, überspringe Start");
     return;
   }
 
   console.log("[Batch] Starte Batch-Job...");
-  jobState.running = true;
-  jobState.processed = 0;
-  jobState.errors = 0;
-  jobState.startedAt = new Date();
+  await updateJobState({
+    running: true,
+    processed: 0,
+    errors: 0,
+    startedAt: new Date(),
+    current: null,
+  });
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     console.error("[Batch] OPENAI_API_KEY fehlt!");
-    jobState.running = false;
+    await updateJobState({ running: false });
     return;
   }
 
@@ -203,7 +237,7 @@ async function runBatchJob() {
       orderBy: [{ updatedAt: "desc" }],
     });
 
-    jobState.total = professions.length;
+    await updateJobState({ total: professions.length });
     console.log(`[Batch] ${professions.length} Berufe gefunden, die generiert werden müssen`);
 
     // Batch-Verarbeitung mit Rate-Limiting (2 Requests pro Sekunde)
@@ -213,7 +247,8 @@ async function runBatchJob() {
     console.log(`[Batch] Starte Verarbeitung von ${professions.length} Berufen in Batches von ${batchSize}`);
 
     for (let i = 0; i < professions.length; i += batchSize) {
-      if (!jobState.running) {
+      const state = await getJobState();
+      if (!state.running) {
         console.log(`[Batch] Job wurde gestoppt bei Index ${i}`);
         break; // Möglichkeit zum Stoppen
       }
@@ -222,14 +257,21 @@ async function runBatchJob() {
       console.log(`[Batch] Verarbeite Batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(professions.length / batchSize)} (${i + 1}-${Math.min(i + batchSize, professions.length)} von ${professions.length})`);
 
       const promises = batch.map((profession) => {
-        jobState.current = profession.title;
-        return generateContentForProfession(client, profession).then((success) => {
-          if (success) {
-            jobState.processed++;
-            console.log(`[Batch] Fortschritt: ${jobState.processed}/${jobState.total} (${Math.round((jobState.processed / jobState.total) * 100)}%)`);
-          } else {
-            jobState.errors++;
-            console.log(`[Batch] Fehler bei ${profession.title}, Gesamt-Fehler: ${jobState.errors}`);
+        return generateContentForProfession(client, profession, async () => {
+          const currentState = await getJobState();
+          const newProcessed = currentState.processed + 1;
+          await updateJobState({
+            processed: newProcessed,
+            current: profession.title,
+          });
+          console.log(`[Batch] Fortschritt: ${newProcessed}/${currentState.total} (${Math.round((newProcessed / currentState.total) * 100)}%)`);
+        }).then(async (success) => {
+          if (!success) {
+            const currentState = await getJobState();
+            await updateJobState({
+              errors: currentState.errors + 1,
+            });
+            console.log(`[Batch] Fehler bei ${profession.title}, Gesamt-Fehler: ${currentState.errors + 1}`);
           }
         });
       });
@@ -242,26 +284,31 @@ async function runBatchJob() {
       }
     }
 
-    console.log(`[Batch] Job abgeschlossen! Verarbeitet: ${jobState.processed}, Fehler: ${jobState.errors}, Gesamt: ${jobState.total}`);
+    const finalState = await getJobState();
+    console.log(`[Batch] Job abgeschlossen! Verarbeitet: ${finalState.processed}, Fehler: ${finalState.errors}, Gesamt: ${finalState.total}`);
   } catch (error) {
     console.error("[Batch] Kritischer Fehler im Batch-Job:", error);
     if (error instanceof Error) {
       console.error(`[Batch] Fehler-Details: ${error.message}, Stack: ${error.stack}`);
     }
-    jobState.errors++;
+    const currentState = await getJobState();
+    await updateJobState({ errors: currentState.errors + 1 });
   } finally {
-    jobState.running = false;
-    jobState.current = undefined;
+    await updateJobState({
+      running: false,
+      current: null,
+    });
     console.log("[Batch] Job-State zurückgesetzt");
   }
 }
 
 export async function POST(req: NextRequest) {
   // Starte den Job im Hintergrund (nicht await!)
-  if (!jobState.running) {
-    runBatchJob().catch((error) => {
+  const currentState = await getJobState();
+  if (!currentState.running) {
+    runBatchJob().catch(async (error) => {
       console.error("Batch-Job Fehler:", error);
-      jobState.running = false;
+      await updateJobState({ running: false });
     });
     return NextResponse.json({ ok: true, message: "Batch-Job gestartet" });
   } else {
@@ -270,20 +317,21 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  const state = await getJobState();
   return NextResponse.json({
-    running: jobState.running,
-    processed: jobState.processed,
-    total: jobState.total,
-    errors: jobState.errors,
-    current: jobState.current,
-    startedAt: jobState.startedAt?.toISOString(),
-    progress: jobState.total > 0 ? Math.round((jobState.processed / jobState.total) * 100) : 0,
+    running: state.running,
+    processed: state.processed,
+    total: state.total,
+    errors: state.errors,
+    current: state.current,
+    startedAt: state.startedAt?.toISOString(),
+    progress: state.total > 0 ? Math.round((state.processed / state.total) * 100) : 0,
   });
 }
 
 export async function DELETE(req: NextRequest) {
   // Stoppe den Job
-  jobState.running = false;
+  await updateJobState({ running: false });
   return NextResponse.json({ ok: true, message: "Batch-Job gestoppt" });
 }
 

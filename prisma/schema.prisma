@@ -129,3 +129,16 @@ model Article {
 
   @@index([status, publishedAt])
 }
+
+model BatchJob {
+  id          String   @id @default("batch-job") // Nur ein Job gleichzeitig
+  running     Boolean  @default(false)
+  processed   Int      @default(0)
+  total       Int      @default(0)
+  errors      Int      @default(0)
+  current     String?
+  startedAt   DateTime?
+  updatedAt   DateTime @updatedAt
+
+  @@map("batch_job")
+}
