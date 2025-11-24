@@ -229,7 +229,12 @@ body {
 }
 .content-body details > *:not(summary) {
   padding: 0 1rem 1rem 1rem;
+  padding-left: 1rem; /* Bündig mit summary padding (summary hat 0.9rem 1rem) */
   color: #27272a; /* zinc-800 */
+}
+.content-body details > p:not(summary) {
+  margin-left: 0;
+  margin-right: 0;
 }
 .content-body details + details {
   margin-top: 0.5rem;
