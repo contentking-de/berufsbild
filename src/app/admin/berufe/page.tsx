@@ -66,36 +66,6 @@ Antworte NUR im folgenden JSON-Format (keine zusätzlichen Erklärungen):
   };
 }
 
-async function createProfession(formData: FormData) {
-  "use server";
-  const berufsbild = (formData.get("berufsbild") as string)?.trim();
-  if (!berufsbild) return;
-
-  try {
-    // Generiere Metadaten via KI
-    const metadata = await generateMetadata(berufsbild);
-
-    // alphabeticalKey basiert auf dem ersten Buchstaben des Berufsbilds
-    const key = berufsbild.trim()[0]?.toUpperCase();
-    const alphabeticalKey = /[A-Z]/.test(key) ? key : "#";
-
-    await prisma.profession.create({
-      data: {
-        title: metadata.title,
-        subtitle: metadata.subtitle || null,
-        slug: metadata.slug,
-        berufsbild,
-        alphabeticalKey,
-        status: "DRAFT",
-      },
-    });
-    revalidatePath("/admin/berufe");
-  } catch (error) {
-    console.error("Fehler beim Erstellen des Berufs:", error);
-    throw error;
-  }
-}
-
 function stripHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -124,6 +94,12 @@ function removeRepeatedTitleAtStart(html: string, title: string): string {
     return html.replace(re, "").trimStart();
   }
   return html;
+}
+
+function cleanCategoryNumbering(html: string): string {
+  // Entferne Nummerierungen wie "Kategorie1:", "Kategorie2:", etc. aus dem HTML
+  // Sucht nach Mustern wie "Kategorie1:", "Kategorie2:", "Kategorie 1:", "Kategorie 2:", etc.
+  return html.replace(/\bKategorie\s*\d+\s*:\s*/gi, "");
 }
 
 async function generateContentForProfession(
@@ -192,8 +168,9 @@ WICHTIG: Verwende EXAKT folgende Struktur mit diesen Überschriften (als <h2>):
     - 3-5 verwandte Berufsbezeichnungen
 
 11. <h3>Kategorisierung</h3>
-    - Fett gedruckt: <strong>Kategorie1, Kategorie2, Kategorie3, ...</strong>
+    - Fett gedruckt: <strong>Technologie, Recht, Ethik, Compliance, Management</strong>
     - 4-6 relevante Kategorien (z.B. Branche, Fachbereich, Tätigkeitsfeld)
+    - WICHTIG: Nur die Kategorienamen ohne Nummerierung oder "Kategorie"-Präfix verwenden!
 
 Rahmenbedingungen:
 - Zielgruppe: Schüler:innen & Student:innen, Ansprache: DU
@@ -224,6 +201,9 @@ Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
 
   // Entferne evtl. wiederholten Titel als erste Überschrift
   html = removeRepeatedTitleAtStart(html, title);
+
+  // Entferne Nummerierungen aus Kategorien
+  html = cleanCategoryNumbering(html);
 
   return html;
 }
@@ -432,22 +412,6 @@ export default async function AdminProfessionsPage({ searchParams }: Props) {
   const totalPages = Math.ceil(total / pageSize);
   return (
     <div className="space-y-10">
-      <section>
-        <h2 className="text-lg font-medium">Beruf hinzufügen</h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          Gib nur das Berufsbild ein. Title, Untertitel und Slug werden automatisch via KI generiert.
-        </p>
-        <form action={createProfession} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
-          <input
-            name="berufsbild"
-            placeholder="Berufsbild (z. B. Medizinische Fachangestellte)"
-            className="rounded-lg border border-zinc-300 px-3 py-2 sm:col-span-3"
-            required
-          />
-          <button className="rounded-lg bg-zinc-900 px-4 py-2 text-white">Anlegen</button>
-        </form>
-      </section>
-
       <section>
         <h2 className="text-lg font-medium">Mehrere Berufsbilder auf einmal anlegen</h2>
         <p className="mt-1 text-sm text-zinc-600">

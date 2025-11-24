@@ -98,6 +98,12 @@ function removeRepeatedTitleAtStart(html: string, title: string): string {
   return html;
 }
 
+function cleanCategoryNumbering(html: string): string {
+  // Entferne Nummerierungen wie "Kategorie1:", "Kategorie2:", etc. aus dem HTML
+  // Sucht nach Mustern wie "Kategorie1:", "Kategorie2:", "Kategorie 1:", "Kategorie 2:", etc.
+  return html.replace(/\bKategorie\s*\d+\s*:\s*/gi, "");
+}
+
 async function generateContentForProfession(
   client: OpenAI,
   profession: { id: string; title: string; berufsbild: string | null },
@@ -166,8 +172,9 @@ WICHTIG: Verwende EXAKT folgende Struktur mit diesen Überschriften (als <h2>):
     - 3-5 verwandte Berufsbezeichnungen
 
 11. <h3>Kategorisierung</h3>
-    - Fett gedruckt: <strong>Kategorie1, Kategorie2, Kategorie3, ...</strong>
+    - Fett gedruckt: <strong>Technologie, Recht, Ethik, Compliance, Management</strong>
     - 4-6 relevante Kategorien (z.B. Branche, Fachbereich, Tätigkeitsfeld)
+    - WICHTIG: Nur die Kategorienamen ohne Nummerierung oder "Kategorie"-Präfix verwenden!
 
 Rahmenbedingungen:
 - Zielgruppe: Schüler:innen & Student:innen, Ansprache: DU
@@ -198,6 +205,9 @@ Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
 
     // Entferne evtl. wiederholten Titel als erste Überschrift
     html = removeRepeatedTitleAtStart(html, profession.title);
+
+    // Entferne Nummerierungen aus Kategorien
+    html = cleanCategoryNumbering(html);
 
     await prisma.profession.update({
       where: { id: profession.id },
