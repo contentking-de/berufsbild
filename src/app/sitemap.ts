@@ -1,7 +1,12 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.berufsbild.com";
+// Entferne www. aus der URL, falls vorhanden
+function normalizeBaseUrl(url: string): string {
+  return url.replace(/^https?:\/\/(www\.)/i, "https://");
+}
+
+const BASE_URL = normalizeBaseUrl(process.env.NEXT_PUBLIC_SITE_URL || "https://berufsbild.com");
 
 export const dynamic = "force-dynamic";
 

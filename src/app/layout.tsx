@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   },
   description:
     "Über 18.000 Berufsbilder – modern präsentiert. A–Z Übersicht, Detailprofile und Magazin.",
-  metadataBase: new URL("https://www.berufsbild.com"),
+  metadataBase: new URL("https://berufsbild.com"),
   icons: {
     icon: "/favicon.ico",
   },
