@@ -40,7 +40,13 @@ function removeRepeatedTitleAtStart(html: string, title: string): string {
 function cleanCategoryNumbering(html: string): string {
   // Entferne Nummerierungen wie "Kategorie1:", "Kategorie2:", etc. aus dem HTML
   // Sucht nach Mustern wie "Kategorie1:", "Kategorie2:", "Kategorie 1:", "Kategorie 2:", etc.
-  return html.replace(/\bKategorie\s*\d+\s*:\s*/gi, "");
+  let cleaned = html.replace(/\bKategorie\s*\d+\s*:\s*/gi, "");
+  
+  // Entferne die Beispiel-Kategorien, falls sie wörtlich übernommen wurden
+  const exampleCategories = /Technologie,\s*Recht,\s*Ethik,\s*Compliance,\s*Management/gi;
+  cleaned = cleaned.replace(exampleCategories, "");
+  
+  return cleaned;
 }
 
 async function generateMetadata(berufsbild: string): Promise<{ title: string; subtitle: string | null; slug: string }> {
@@ -168,9 +174,10 @@ WICHTIG: Verwende EXAKT folgende Struktur mit diesen Überschriften (als <h2>):
     - 3-5 verwandte Berufsbezeichnungen
 
 11. <h3>Kategorisierung</h3>
-    - Fett gedruckt: <strong>Technologie, Recht, Ethik, Compliance, Management</strong>
-    - 4-6 relevante Kategorien (z.B. Branche, Fachbereich, Tätigkeitsfeld)
-    - WICHTIG: Nur die Kategorienamen ohne Nummerierung oder "Kategorie"-Präfix verwenden!
+    - Fett gedruckt: <strong>Kategorie1, Kategorie2, Kategorie3, ...</strong>
+    - 4-6 relevante Kategorien, die ZUM SPEZIFISCHEN BERUFSBILD passen (z.B. Branche, Fachbereich, Tätigkeitsfeld)
+    - WICHTIG: Generiere passende Kategorien für DIESEN spezifischen Beruf, NICHT die Beispiel-Kategorien verwenden!
+    - Nur die Kategorienamen ohne Nummerierung oder "Kategorie"-Präfix verwenden!
 
 Rahmenbedingungen:
 - Zielgruppe: Schüler:innen & Student:innen, Ansprache: DU
