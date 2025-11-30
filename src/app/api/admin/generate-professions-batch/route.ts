@@ -7,20 +7,22 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60; // 60 Sekunden (Maximum für Vercel Pro Plan)
 
 async function getJobState() {
-  const job = await prisma.batchJob.findUnique({
-    where: { id: "batch-job" },
+  return await retryDbOperation(async () => {
+    const job = await prisma.batchJob.findUnique({
+      where: { id: "batch-job" },
+    });
+    return job || {
+      id: "batch-job",
+      running: false,
+      processed: 0,
+      total: 0,
+      errors: 0,
+      current: null,
+      startedAt: null,
+      updatedAt: new Date(),
+      errorLogs: [],
+    };
   });
-  return job || {
-    id: "batch-job",
-    running: false,
-    processed: 0,
-    total: 0,
-    errors: 0,
-    current: null,
-    startedAt: null,
-    updatedAt: new Date(),
-    errorLogs: [],
-  };
 }
 
 async function updateJobState(data: {
@@ -32,40 +34,47 @@ async function updateJobState(data: {
   startedAt?: Date | null;
   errorLogs?: any;
 }) {
-  await prisma.batchJob.upsert({
-    where: { id: "batch-job" },
-    create: {
-      id: "batch-job",
-      running: data.running ?? false,
-      processed: data.processed ?? 0,
-      total: data.total ?? 0,
-      errors: data.errors ?? 0,
-      current: data.current ?? null,
-      startedAt: data.startedAt ?? null,
-      errorLogs: data.errorLogs ?? [],
-    },
-    update: {
-      ...data,
-      updatedAt: new Date(),
-    },
+  await retryDbOperation(async () => {
+    await prisma.batchJob.upsert({
+      where: { id: "batch-job" },
+      create: {
+        id: "batch-job",
+        running: data.running ?? false,
+        processed: data.processed ?? 0,
+        total: data.total ?? 0,
+        errors: data.errors ?? 0,
+        current: data.current ?? null,
+        startedAt: data.startedAt ?? null,
+        errorLogs: data.errorLogs ?? [],
+      },
+      update: {
+        ...data,
+        updatedAt: new Date(),
+      },
+    });
   });
 }
 
 async function addErrorLog(professionId: string, title: string, error: any) {
-  const currentState = await getJobState();
-  const errorLogs = (currentState.errorLogs as any[]) || [];
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  const errorStack = error instanceof Error ? error.stack : undefined;
-  
-  errorLogs.push({
-    professionId,
-    title,
-    error: errorMessage,
-    stack: errorStack,
-    timestamp: new Date().toISOString(),
-  });
-  
-  await updateJobState({ errorLogs });
+  try {
+    const currentState = await getJobState();
+    const errorLogs = (currentState.errorLogs as any[]) || [];
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    errorLogs.push({
+      professionId,
+      title,
+      error: errorMessage,
+      stack: errorStack,
+      timestamp: new Date().toISOString(),
+    });
+    
+    await updateJobState({ errorLogs });
+  } catch (logError) {
+    // Wenn das Loggen fehlschlägt, nur in Console ausgeben
+    console.error(`[Batch] Fehler beim Loggen: ${logError}`);
+  }
 }
 
 function stripHtml(html: string): string {
@@ -102,6 +111,28 @@ function cleanCategoryNumbering(html: string): string {
   // Entferne Nummerierungen wie "Kategorie1:", "Kategorie2:", etc. aus dem HTML
   // Sucht nach Mustern wie "Kategorie1:", "Kategorie2:", "Kategorie 1:", "Kategorie 2:", etc.
   return html.replace(/\bKategorie\s*\d+\s*:\s*/gi, "");
+}
+
+// Retry-Logik für Datenbankoperationen
+async function retryDbOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  delayMs: number = 1000
+): Promise<T> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      if (attempt < maxRetries) {
+        const waitTime = delayMs * attempt; // Exponential backoff
+        console.log(`[Batch] DB-Operation fehlgeschlagen, Versuch ${attempt}/${maxRetries}, warte ${waitTime}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+      }
+    }
+  }
+  throw lastError;
 }
 
 async function generateContentForProfession(
@@ -209,15 +240,22 @@ Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
     // Entferne Nummerierungen aus Kategorien
     html = cleanCategoryNumbering(html);
 
-    await prisma.profession.update({
-      where: { id: profession.id },
-      data: {
-        content: html,
-        contentRegeneratedAt: new Date(),
-      },
+    // Datenbank-Update mit Retry-Logik
+    await retryDbOperation(async () => {
+      await prisma.profession.update({
+        where: { id: profession.id },
+        data: {
+          content: html,
+          contentRegeneratedAt: new Date(),
+        },
+      });
     });
 
     console.log(`[Batch] Erfolgreich generiert: ${profession.title} (${profession.id}), Content-Länge: ${html.length} Zeichen`);
+    
+    // Kurze Pause nach DB-Update, um Verbindungen freizugeben
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    
     // Progress wird nach erfolgreichem Update aktualisiert
     await onProgress();
     return true;
@@ -242,7 +280,9 @@ async function runBatchJob() {
   console.log("[Batch] Starte Batch-Job...");
   
   // Zuerst die Anzahl der Berufe ermitteln, damit total sofort verfügbar ist
-  const totalCount = await prisma.profession.count();
+  const totalCount = await retryDbOperation(async () => {
+    return await prisma.profession.count();
+  });
   console.log(`[Batch] Gefunden: ${totalCount} Berufe insgesamt`);
   
   await updateJobState({
@@ -267,13 +307,15 @@ async function runBatchJob() {
   try {
     // Alle Berufe laden (auch die mit vorhandenem Content)
     console.log("[Batch] Lade Berufe aus Datenbank...");
-    const professions = await prisma.profession.findMany({
-      select: {
-        id: true,
-        title: true,
-        berufsbild: true,
-      },
-      orderBy: [{ updatedAt: "desc" }],
+    const professions = await retryDbOperation(async () => {
+      return await prisma.profession.findMany({
+        select: {
+          id: true,
+          title: true,
+          berufsbild: true,
+        },
+        orderBy: [{ updatedAt: "desc" }],
+      });
     });
 
     // Total sollte bereits gesetzt sein, aber zur Sicherheit nochmal setzen
@@ -284,7 +326,7 @@ async function runBatchJob() {
     console.log(`[Batch] ${professions.length} Berufe gefunden, die generiert werden müssen`);
 
     // Sequenzielle Verarbeitung (1 Request nach dem anderen) um DB-Connection-Limits zu vermeiden
-    const delayBetweenRequests = 2000; // 2 Sekunden zwischen Requests
+    const delayBetweenRequests = 3000; // 3 Sekunden zwischen Requests (erhöht für bessere DB-Stabilität)
 
     console.log(`[Batch] Starte sequenzielle Verarbeitung von ${professions.length} Berufen`);
 
