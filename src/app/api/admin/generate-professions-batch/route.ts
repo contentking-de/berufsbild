@@ -279,11 +279,15 @@ async function runBatchJob() {
 
   console.log("[Batch] Starte Batch-Job...");
   
-  // Zuerst die Anzahl der Berufe ermitteln, damit total sofort verfügbar ist
+  // Zuerst die Anzahl der Berufe ohne contentRegeneratedAt ermitteln
   const totalCount = await retryDbOperation(async () => {
-    return await prisma.profession.count();
+    return await prisma.profession.count({
+      where: {
+        contentRegeneratedAt: null, // Nur Berufe ohne Generierungs-Datum
+      },
+    });
   });
-  console.log(`[Batch] Gefunden: ${totalCount} Berufe insgesamt`);
+  console.log(`[Batch] Gefunden: ${totalCount} Berufe ohne contentRegeneratedAt`);
   
   await updateJobState({
     running: true,
@@ -305,10 +309,13 @@ async function runBatchJob() {
   const client = new OpenAI({ apiKey });
 
   try {
-    // Alle Berufe laden (auch die mit vorhandenem Content)
-    console.log("[Batch] Lade Berufe aus Datenbank...");
+    // Nur Berufe laden, die noch kein contentRegeneratedAt haben
+    console.log("[Batch] Lade Berufe aus Datenbank (nur ohne contentRegeneratedAt)...");
     const professions = await retryDbOperation(async () => {
       return await prisma.profession.findMany({
+        where: {
+          contentRegeneratedAt: null, // Nur Berufe ohne Generierungs-Datum
+        },
         select: {
           id: true,
           title: true,
