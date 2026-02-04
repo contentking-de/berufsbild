@@ -340,6 +340,11 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
   const randomOthers = await prisma.$queryRaw<
     { slug: string; berufsbild: string }[]
   >`SELECT "slug","Berufsbild" AS "berufsbild" FROM "Profession" WHERE "status" = 'PUBLISHED' AND "id" <> ${profession.id} ORDER BY random() LIMIT 12`;
+  
+  // Zufällige Magazin-Beiträge für Sidebar
+  const randomArticles = await prisma.$queryRaw<
+    { slug: string; title: string }[]
+  >`SELECT "slug","title" FROM "Article" WHERE "status" = 'PUBLISHED' ORDER BY random() LIMIT 5`;
   const linkedHtml = profession.content
     ? autolinkProfessions(
         profession.content,
@@ -398,6 +403,23 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
               ))}
             </ul>
           </div>
+          {/* Mobile: Magazin-Beiträge unter dem Content */}
+          {randomArticles.length > 0 && (
+            <div className="mt-6 rounded-lg border border-zinc-200 lg:hidden">
+              <div className="border-b border-zinc-200 p-3">
+                <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-600">Aus dem Magazin</h2>
+              </div>
+              <ul className="divide-y divide-zinc-200 text-sm">
+                {randomArticles.map((a) => (
+                  <li key={a.slug} className="p-3">
+                    <Link href={`/magazin/${a.slug}`} className="text-blue-600 hover:text-blue-700 hover:underline">
+                      {a.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </article>
         <aside className="order-1 lg:order-2 lg:col-span-1">
           <div className="lg:sticky lg:top-24">
@@ -436,6 +458,23 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
                 ))}
               </ul>
             </div>
+            {/* Desktop: Magazin-Beiträge in Sidebar */}
+            {randomArticles.length > 0 && (
+              <div className="mt-6 hidden rounded-lg border border-zinc-200 lg:block">
+                <div className="border-b border-zinc-200 p-3">
+                  <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-600">Aus dem Magazin</h2>
+                </div>
+                <ul className="divide-y divide-zinc-200 text-sm">
+                  {randomArticles.map((a) => (
+                    <li key={a.slug} className="p-3">
+                      <Link href={`/magazin/${a.slug}`} className="text-blue-600 hover:text-blue-700 hover:underline">
+                        {a.title}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </aside>
       </div>
