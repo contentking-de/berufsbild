@@ -354,11 +354,36 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
       )
     : "";
   const { htmlWithIds, toc } = addAnchorsAndCollectToc(linkedHtml);
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: profession.title,
+    description: profession.descriptionFinal ?? profession.excerpt ?? undefined,
+    datePublished: profession.createdAt.toISOString(),
+    dateModified: profession.updatedAt.toISOString(),
+    author: {
+      "@type": "Person",
+      name: "Maya Sacotte",
+    },
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <header className="border-b border-zinc-200 pb-6">
         <h1 className="text-3xl font-semibold tracking-tight">{profession.title}</h1>
         {profession.subtitle ? <p className="mt-2 text-zinc-600">{profession.subtitle}</p> : null}
+        <p className="mt-3 flex items-center gap-2 text-sm text-zinc-500">
+          <time dateTime={profession.updatedAt.toISOString()}>
+            {profession.updatedAt.toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" })}
+          </time>
+          <span aria-hidden="true">·</span>
+          <span>Maya Sacotte</span>
+        </p>
       </header>
       {profession.excerpt ? (
         <section className="mt-8">
