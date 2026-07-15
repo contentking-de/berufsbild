@@ -27,6 +27,7 @@ export function Header() {
                 type="search"
                 name="q"
                 placeholder="Beruf suchen …"
+                required
                 toolparamdescription="Suchbegriff für Berufsbezeichnung, Tätigkeitsfeld oder Branche (z.B. 'Pflege', 'Informatik', 'Tischler')"
                 className="w-56 rounded-md border border-zinc-300 px-3 py-1.5 text-sm outline-none focus:border-zinc-600"
               />

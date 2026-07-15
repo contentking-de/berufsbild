@@ -8,6 +8,7 @@ declare global {
       registerTool(
         tool: {
           name: string;
+          title?: string;
           description: string;
           inputSchema: Record<string, unknown>;
           execute: (params: Record<string, unknown>) => Promise<unknown>;
@@ -29,6 +30,7 @@ export default function WebMCPTools() {
     modelContext.registerTool(
       {
         name: "search_professions",
+        title: "Search Professions",
         description:
           "Durchsucht die berufsbild.com Datenbank mit über 18.000 Berufsbildern. " +
           "Sucht in Berufsbezeichnung, Untertitel und Inhalt. " +
@@ -62,6 +64,7 @@ export default function WebMCPTools() {
               default: 20,
             },
           },
+          required: ["query"],
         },
         async execute(params) {
           const searchParams = new URLSearchParams();
@@ -92,6 +95,7 @@ export default function WebMCPTools() {
     modelContext.registerTool(
       {
         name: "get_profession_detail",
+        title: "Get Profession Detail",
         description:
           "Ruft die Detailseite eines bestimmten Berufsbildes auf berufsbild.com auf. " +
           "Navigiert zur Profilseite mit vollständigen Informationen zu Aufgaben, " +
@@ -119,7 +123,8 @@ export default function WebMCPTools() {
 
     modelContext.registerTool(
       {
-        name: "browse_berufsfelder",
+        name: "navigate_berufsfelder",
+        title: "Navigate Berufsfelder",
         description:
           "Zeigt eine Übersicht der 15 offiziellen Berufsfelder in Deutschland an. " +
           "Berufsfelder gruppieren Berufe thematisch (z.B. Gesundheit, IT, Handwerk). " +

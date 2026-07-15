@@ -199,7 +199,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
           </h1>
           <form
             className="w-full max-w-md md:w-auto"
-            toolname="search_professions"
+            toolname="search_professions_index"
             tooldescription="Suche nach Berufsbildern in der berufsbild.com Datenbank mit über 18.000 Berufen. Gibt passende Berufsprofile mit Titel, Untertitel und Link zurück."
             toolautosubmit
           >
@@ -207,6 +207,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
               name="q"
               defaultValue={query}
               placeholder="Beruf suchen …"
+              required
               toolparamdescription="Suchbegriff für Berufsbezeichnung, Tätigkeitsfeld oder Branche (z.B. 'Pflege', 'Informatik', 'Tischler')"
               className="w-full rounded-lg border border-zinc-300 px-4 py-2 outline-none focus:border-zinc-600"
             />
@@ -298,6 +299,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
               name="q"
               defaultValue={query}
               placeholder="Beruf suchen …"
+              required
               toolparamdescription="Suchbegriff zur Filterung innerhalb des gewählten Buchstabens (z.B. 'Arzt', 'Ingenieur')"
               className="w-full rounded-lg border border-zinc-300 px-4 py-2 outline-none focus:border-zinc-600"
             />
