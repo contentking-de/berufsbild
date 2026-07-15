@@ -28,24 +28,27 @@ function makeRegexForTerm(term: string): RegExp {
 
 function autolinkProfessions(html: string, terms: Array<{ text: string; slug: string }>): string {
   if (!html || terms.length === 0) return html;
-  // Sortiere nach Länge absteigend, um lange Titel vor kürzeren zu verlinken
   const patterns = terms
     .filter((t) => t.text && t.slug)
     .sort((a, b) => (b.text?.length ?? 0) - (a.text?.length ?? 0))
-    .map((t) => ({
-      slug: t.slug,
-      text: t.text,
-      re: makeRegexForTerm(t.text),
-    }));
+    .map((t) => {
+      const tokens = t.text.trim().split(/[\s\-\/]+/).filter(Boolean);
+      const longest = tokens.reduce((a, b) => (a.length >= b.length ? a : b), "");
+      return {
+        slug: t.slug,
+        text: t.text,
+        re: makeRegexForTerm(t.text),
+        quickCheck: longest.toLowerCase(),
+      };
+    });
 
-  const linkedOnce = new Set<string>(); // slug → bereits verlinkt
-  const parts = html.split(/(<[^>]+>)/g); // Tags als eigene Parts erhalten
+  const linkedOnce = new Set<string>();
+  const parts = html.split(/(<[^>]+>)/g);
   let insideAnchor = false;
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
     if (part.startsWith("<")) {
-      // Tag: Tracke <a> … </a>, damit wir innerhalb von Links nichts ersetzen
       const isOpenA = /^<a(\s|>)/i.test(part);
       const isCloseA = /^<\/a\s*>/i.test(part);
       if (isOpenA) insideAnchor = true;
@@ -53,10 +56,11 @@ function autolinkProfessions(html: string, terms: Array<{ text: string; slug: st
       continue;
     }
     if (insideAnchor) continue;
-    // Text-Part: führe Replacements aus (nur erste Vorkommen pro slug)
     let text = part;
+    const textLower = text.toLowerCase();
     for (const p of patterns) {
       if (linkedOnce.has(p.slug)) continue;
+      if (!textLower.includes(p.quickCheck)) continue;
       if (!p.re.test(text)) continue;
       text = text.replace(p.re, (_m, g1) => {
         if (linkedOnce.has(p.slug)) return _m;
@@ -333,8 +337,13 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
   // Alle anderen veröffentlichten Berufe laden, um Auto-Verlinkungen zu setzen
   const linkTargets = await prisma.profession.findMany({
     where: { status: "PUBLISHED", NOT: { id: profession.id } },
-    select: { berufsbild: true, slug: true },
-    take: 500,
+    select: {
+      berufsbild: true,
+      berufsbildMaennlich: true,
+      berufsbildWeiblich: true,
+      title: true,
+      slug: true,
+    },
   });
   // Zufällige weitere Berufe für Sidebar
   const randomOthers = await prisma.$queryRaw<
@@ -345,13 +354,25 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
   const randomArticles = await prisma.$queryRaw<
     { slug: string; title: string }[]
   >`SELECT "slug","title" FROM "Article" WHERE "status" = 'PUBLISHED' ORDER BY random() LIMIT 5`;
+  const autolinkTerms: Array<{ text: string; slug: string }> = [];
+  for (const t of linkTargets) {
+    const names = [
+      t.berufsbild,
+      t.berufsbildMaennlich,
+      t.berufsbildWeiblich,
+      t.title,
+    ];
+    const seen = new Set<string>();
+    for (const name of names) {
+      if (!name) continue;
+      const key = name.trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      autolinkTerms.push({ text: name.trim(), slug: t.slug });
+    }
+  }
   const linkedHtml = profession.content
-    ? autolinkProfessions(
-        profession.content,
-        linkTargets
-          .filter((t) => (t as any).berufsbild && t.slug)
-          .map((t) => ({ text: (t as any).berufsbild as string, slug: t.slug })),
-      )
+    ? autolinkProfessions(profession.content, autolinkTerms)
     : "";
   const { htmlWithIds, toc } = addAnchorsAndCollectToc(linkedHtml);
 
