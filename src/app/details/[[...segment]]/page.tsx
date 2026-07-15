@@ -501,6 +501,19 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
               </ul>
             </div>
           )}
+          {/* Mobile: Datenquelle Bundesagentur */}
+          <div className="mt-6 rounded-lg border border-zinc-200 bg-zinc-50 p-4 lg:hidden">
+            <p className="text-xs leading-relaxed text-zinc-500">
+              Berufsbilder und Berufsprofile basieren auf den offiziellen Daten der Bundesagentur für Arbeit.
+            </p>
+            <a href="https://www.arbeitsagentur.de/bildung/berufe-und-wege/berufe-a-bis-z" target="_blank" rel="nofollow noopener">
+              <img
+                src="/logo-bundesagentur-fuer-arbeit.svg"
+                alt="Logo Bundesagentur für Arbeit"
+                className="mt-3 h-8 w-auto"
+              />
+            </a>
+          </div>
         </article>
         <aside className="order-1 lg:order-2 lg:col-span-1">
           <div className="lg:sticky lg:top-24">
@@ -556,6 +569,19 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
                 </ul>
               </div>
             )}
+            {/* Desktop: Datenquelle Bundesagentur */}
+            <div className="mt-6 hidden rounded-lg border border-zinc-200 bg-zinc-50 p-4 lg:block">
+              <p className="text-xs leading-relaxed text-zinc-500">
+                Berufsbilder und Berufsprofile basieren auf den offiziellen Daten der Bundesagentur für Arbeit.
+              </p>
+              <a href="https://www.arbeitsagentur.de/bildung/berufe-und-wege/berufe-a-bis-z" target="_blank" rel="nofollow noopener">
+                <img
+                  src="/logo-bundesagentur-fuer-arbeit.svg"
+                  alt="Logo Bundesagentur für Arbeit"
+                  className="mt-3 h-8 w-auto"
+                />
+              </a>
+            </div>
           </div>
         </aside>
       </div>
