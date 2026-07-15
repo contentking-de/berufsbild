@@ -26,6 +26,7 @@ async function getJobState() {
       startedAt: null,
       updatedAt: new Date(),
       errorLogs: [],
+      completedItems: [],
     };
   });
 }
