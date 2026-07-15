@@ -4,7 +4,12 @@ import OpenAI from "openai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // 60 Sekunden (Maximum für Vercel Pro Plan)
+export const maxDuration = 300;
+
+const OPENAI_TIMEOUT_MS = 120_000; // 2 Minuten max pro OpenAI-Request
+const ITEM_TIMEOUT_MS = 150_000; // 2.5 Minuten max pro Beruf inkl. DB-Writes
+const HEARTBEAT_INTERVAL_MS = 10_000; // Heartbeat alle 10 Sekunden
+const STALE_THRESHOLD_MS = 60_000; // Job gilt als tot wenn >60s kein Heartbeat
 
 async function getJobState() {
   return await retryDbOperation(async () => {
@@ -33,6 +38,7 @@ async function updateJobState(data: {
   current?: string | null;
   startedAt?: Date | null;
   errorLogs?: any;
+  completedItems?: any;
 }) {
   await retryDbOperation(async () => {
     await prisma.batchJob.upsert({
@@ -46,6 +52,7 @@ async function updateJobState(data: {
         current: data.current ?? null,
         startedAt: data.startedAt ?? null,
         errorLogs: data.errorLogs ?? [],
+        completedItems: data.completedItems ?? [],
       },
       update: {
         ...data,
@@ -132,7 +139,7 @@ async function retryDbOperation<T>(
     } catch (error: any) {
       lastError = error;
       if (attempt < maxRetries) {
-        const waitTime = delayMs * attempt; // Exponential backoff
+        const waitTime = delayMs * attempt;
         console.log(`[Batch] DB-Operation fehlgeschlagen, Versuch ${attempt}/${maxRetries}, warte ${waitTime}ms...`);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
@@ -141,9 +148,42 @@ async function retryDbOperation<T>(
   throw lastError;
 }
 
+// Timeout-Wrapper: bricht ab wenn eine Operation zu lange dauert
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timeout nach ${ms}ms: ${label}`));
+    }, ms);
+    promise.then(
+      (val) => { clearTimeout(timer); resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
+
+// Heartbeat: aktualisiert updatedAt regelmäßig damit Stale-Detection funktioniert
+async function updateHeartbeat() {
+  try {
+    await prisma.batchJob.update({
+      where: { id: "batch-job" },
+      data: { updatedAt: new Date() },
+    });
+  } catch {
+    // Heartbeat-Fehler sind nicht kritisch
+  }
+}
+
+// Prüft ob ein laufender Job eigentlich tot/stale ist
+async function isJobStale(): Promise<boolean> {
+  const job = await prisma.batchJob.findUnique({ where: { id: "batch-job" } });
+  if (!job || !job.running) return false;
+  const age = Date.now() - job.updatedAt.getTime();
+  return age > STALE_THRESHOLD_MS;
+}
+
 async function generateContentForProfession(
   client: OpenAI,
-  profession: { id: string; title: string; berufsbild: string | null },
+  profession: { id: string; title: string; slug: string; berufsbild: string | null },
   onProgress: () => Promise<void>,
 ): Promise<boolean> {
   console.log(`[Batch] Starte Generierung für: ${profession.title} (${profession.id})`);
@@ -222,14 +262,18 @@ Rahmenbedingungen:
 
 Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
 
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.7,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    });
+    const completion = await withTimeout(
+      client.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.7,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+      OPENAI_TIMEOUT_MS,
+      `OpenAI-Request für "${profession.title}"`,
+    );
 
     let html = completion.choices[0]?.message?.content?.trim() || "";
     if (!html) {
@@ -304,6 +348,7 @@ async function runBatchJob() {
     startedAt: new Date(),
     current: null,
     errorLogs: [],
+    completedItems: [],
   });
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -313,7 +358,7 @@ async function runBatchJob() {
     return;
   }
 
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey, timeout: OPENAI_TIMEOUT_MS });
 
   try {
     // Nur Berufe laden, die noch kein contentRegeneratedAt haben
@@ -321,11 +366,12 @@ async function runBatchJob() {
     const professions = await retryDbOperation(async () => {
       return await prisma.profession.findMany({
         where: {
-          contentRegeneratedAt: null, // Nur Berufe ohne Generierungs-Datum
+          contentRegeneratedAt: null,
         },
         select: {
           id: true,
           title: true,
+          slug: true,
           berufsbild: true,
         },
         orderBy: [{ updatedAt: "desc" }],
@@ -339,43 +385,68 @@ async function runBatchJob() {
     }
     console.log(`[Batch] ${professions.length} Berufe gefunden, die generiert werden müssen`);
 
-    // Sequenzielle Verarbeitung (1 Request nach dem anderen) um DB-Connection-Limits zu vermeiden
-    const delayBetweenRequests = 3000; // 3 Sekunden zwischen Requests (erhöht für bessere DB-Stabilität)
+    const delayBetweenRequests = 2000;
 
     console.log(`[Batch] Starte sequenzielle Verarbeitung von ${professions.length} Berufen`);
 
-    for (let i = 0; i < professions.length; i++) {
-      const state = await getJobState();
-      if (!state.running) {
-        console.log(`[Batch] Job wurde gestoppt bei Index ${i}`);
-        break; // Möglichkeit zum Stoppen
+    // Heartbeat-Interval starten
+    const heartbeatInterval = setInterval(updateHeartbeat, HEARTBEAT_INTERVAL_MS);
+
+    try {
+      for (let i = 0; i < professions.length; i++) {
+        const state = await getJobState();
+        if (!state.running) {
+          console.log(`[Batch] Job wurde gestoppt bei Index ${i}`);
+          break;
+        }
+
+        const profession = professions[i];
+        console.log(`[Batch] Verarbeite ${i + 1}/${professions.length}: ${profession.title}`);
+
+        await updateHeartbeat();
+
+        let success: boolean;
+        try {
+          success = await withTimeout(
+            generateContentForProfession(client, profession, async () => {
+              const currentState = await getJobState();
+              const newProcessed = currentState.processed + 1;
+              const completedItems = ((currentState.completedItems as any[]) || []).slice(-49);
+              completedItems.push({
+                title: profession.title,
+                slug: profession.slug,
+                timestamp: new Date().toISOString(),
+              });
+              await updateJobState({
+                processed: newProcessed,
+                current: profession.title,
+                completedItems,
+              });
+              console.log(`[Batch] Fortschritt: ${newProcessed}/${currentState.total} (${Math.round((newProcessed / currentState.total) * 100)}%)`);
+            }),
+            ITEM_TIMEOUT_MS,
+            `Gesamtverarbeitung von "${profession.title}"`,
+          );
+        } catch (timeoutError) {
+          console.error(`[Batch] Timeout bei ${profession.title}:`, timeoutError);
+          await addErrorLog(profession.id, profession.title, timeoutError);
+          success = false;
+        }
+
+        if (!success) {
+          const currentState = await getJobState();
+          await updateJobState({
+            errors: currentState.errors + 1,
+          });
+          console.log(`[Batch] Fehler bei ${profession.title}, Gesamt-Fehler: ${currentState.errors + 1}`);
+        }
+
+        if (i < professions.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, delayBetweenRequests));
+        }
       }
-
-      const profession = professions[i];
-      console.log(`[Batch] Verarbeite ${i + 1}/${professions.length}: ${profession.title}`);
-
-      const success = await generateContentForProfession(client, profession, async () => {
-        const currentState = await getJobState();
-        const newProcessed = currentState.processed + 1;
-        await updateJobState({
-          processed: newProcessed,
-          current: profession.title,
-        });
-        console.log(`[Batch] Fortschritt: ${newProcessed}/${currentState.total} (${Math.round((newProcessed / currentState.total) * 100)}%)`);
-      });
-
-      if (!success) {
-        const currentState = await getJobState();
-        await updateJobState({
-          errors: currentState.errors + 1,
-        });
-        console.log(`[Batch] Fehler bei ${profession.title}, Gesamt-Fehler: ${currentState.errors + 1}`);
-      }
-
-      // Rate-Limiting: Warte zwischen Requests (außer beim letzten)
-      if (i < professions.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, delayBetweenRequests));
-      }
+    } finally {
+      clearInterval(heartbeatInterval);
     }
 
     const finalState = await getJobState();
@@ -397,30 +468,42 @@ async function runBatchJob() {
 }
 
 export async function POST(req: NextRequest) {
-  // Starte den Job im Hintergrund (nicht await!)
   const currentState = await getJobState();
-  if (!currentState.running) {
-    runBatchJob().catch(async (error) => {
-      console.error("Batch-Job Fehler:", error);
-      await updateJobState({ running: false });
-    });
-    return NextResponse.json({ ok: true, message: "Batch-Job gestartet" });
-  } else {
-    return NextResponse.json({ ok: false, message: "Batch-Job läuft bereits" }, { status: 400 });
+
+  if (currentState.running) {
+    // Prüfe ob der Job stale/tot ist
+    const stale = await isJobStale();
+    if (stale) {
+      console.log("[Batch] Stale-Job erkannt (kein Heartbeat seit >60s), setze zurück und starte neu");
+      await updateJobState({ running: false, current: null });
+    } else {
+      return NextResponse.json({ ok: false, message: "Batch-Job läuft bereits" }, { status: 400 });
+    }
   }
+
+  runBatchJob().catch(async (error) => {
+    console.error("Batch-Job Fehler:", error);
+    await updateJobState({ running: false, current: null });
+  });
+  return NextResponse.json({ ok: true, message: "Batch-Job gestartet" });
 }
 
 export async function GET(req: NextRequest) {
   const state = await getJobState();
+  const stale = state.running ? await isJobStale() : false;
+
   return NextResponse.json({
     running: state.running,
+    stale,
     processed: state.processed,
     total: state.total,
     errors: state.errors,
     current: state.current,
     startedAt: state.startedAt?.toISOString(),
+    lastHeartbeat: state.updatedAt?.toISOString(),
     progress: state.total > 0 ? Math.round((state.processed / state.total) * 100) : 0,
     errorLogs: state.errorLogs || [],
+    completedItems: state.completedItems || [],
   });
 }
 

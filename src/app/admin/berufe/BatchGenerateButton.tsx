@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type ErrorLog = {
   professionId: string;
@@ -10,23 +10,49 @@ type ErrorLog = {
   timestamp: string;
 };
 
+type CompletedItem = {
+  title: string;
+  slug: string;
+  timestamp: string;
+};
+
 type JobStatus = {
   running: boolean;
+  stale?: boolean;
   processed: number;
   total: number;
   errors: number;
   current?: string;
   startedAt?: string;
+  lastHeartbeat?: string;
   progress: number;
   errorLogs?: ErrorLog[];
+  completedItems?: CompletedItem[];
 };
+
+function formatDuration(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+  return `${seconds}s`;
+}
+
+function estimateRemaining(processed: number, total: number, startedAt: string): string {
+  if (processed === 0) return "wird berechnet...";
+  const elapsed = Date.now() - new Date(startedAt).getTime();
+  const perItem = elapsed / processed;
+  const remaining = perItem * (total - processed);
+  return `~${formatDuration(remaining)}`;
+}
 
 export default function BatchGenerateButton() {
   const [status, setStatus] = useState<JobStatus | null>(null);
   const [loading, setLoading] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Polling für Job-Status alle 2 Sekunden
     const interval = setInterval(async () => {
       try {
         const res = await fetch("/api/admin/generate-professions-batch");
@@ -37,7 +63,6 @@ export default function BatchGenerateButton() {
       }
     }, 2000);
 
-    // Initialer Status-Check
     fetch("/api/admin/generate-professions-batch")
       .then((res) => res.json())
       .then((data) => setStatus(data))
@@ -45,6 +70,12 @@ export default function BatchGenerateButton() {
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
+  }, [status?.completedItems?.length]);
 
   async function handleStart() {
     if (!confirm("Möchtest du wirklich neuen Content für ALLE Berufe generieren? Das überschreibt vorhandenen Content und kann sehr lange dauern.")) {
@@ -73,6 +104,7 @@ export default function BatchGenerateButton() {
   }
 
   const isRunning = status?.running || false;
+  const completedItems = status?.completedItems || [];
 
   return (
     <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
@@ -82,106 +114,213 @@ export default function BatchGenerateButton() {
       </p>
 
       {status && (
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 space-y-3">
           {isRunning ? (
             <>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-700">Status:</span>
-                <span className="font-medium text-blue-600">Läuft...</span>
+              {/* Status-Header */}
+              <div className="flex items-center gap-2">
+                {status.stale ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    Hängt
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+                    Läuft
+                  </span>
+                )}
+                {status.startedAt && (
+                  <span className="text-xs text-zinc-500">
+                    seit {formatDuration(Date.now() - new Date(status.startedAt).getTime())}
+                  </span>
+                )}
               </div>
+
+              {status.stale && (
+                <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                  Kein Heartbeat seit {status.lastHeartbeat ? formatDuration(Date.now() - new Date(status.lastHeartbeat).getTime()) : "unbekannt"}.
+                  Der Job ist wahrscheinlich abgestürzt – stoppen und neu starten.
+                </div>
+              )}
+
+              {/* Progressbar */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs text-zinc-600">
+                  <span>{status.processed} / {status.total} Berufe</span>
+                  <span>{status.progress}%</span>
+                </div>
+                <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200">
+                  <div
+                    className="relative h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500"
+                    style={{ width: `${status.progress}%` }}
+                  >
+                    {status.progress > 3 && (
+                      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
+                        {status.progress}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs text-zinc-500">
+                  {status.errors > 0 && (
+                    <span className="text-red-600">{status.errors} Fehler</span>
+                  )}
+                  {status.startedAt && status.processed > 0 && (
+                    <span className="ml-auto">
+                      Verbleibend: {estimateRemaining(status.processed, status.total, status.startedAt)}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Aktuell verarbeitet */}
               {status.current && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-700">Aktuell:</span>
-                  <span className="font-medium text-zinc-900">{status.current}</span>
+                <div className="flex items-center gap-2 text-xs text-zinc-600">
+                  <svg className="h-3 w-3 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span className="truncate">{status.current}</span>
                 </div>
               )}
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-700">Fortschritt:</span>
-                <span className="font-medium text-zinc-900">
-                  {status.processed} / {status.total} ({status.progress}%)
-                </span>
-              </div>
-              {status.errors > 0 && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-700">Fehler:</span>
-                  <span className="font-medium text-red-600">{status.errors}</span>
-                </div>
-              )}
-              {status.errorLogs && status.errorLogs.length > 0 && (
-                <div className="mt-2 max-h-48 overflow-y-auto rounded border border-red-200 bg-red-50 p-2">
-                  <p className="mb-1 text-xs font-medium text-red-800">Fehler-Details:</p>
-                  <div className="space-y-1">
-                    {status.errorLogs.map((log, idx) => (
-                      <details key={idx} className="text-xs">
-                        <summary className="cursor-pointer text-red-700 hover:text-red-900">
-                          {log.title} - {new Date(log.timestamp).toLocaleTimeString("de-DE")}
-                        </summary>
-                        <div className="mt-1 rounded bg-white p-2 font-mono text-xs text-red-900">
-                          <div className="font-semibold">{log.error}</div>
-                          {log.stack && (
-                            <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] text-red-700">
-                              {log.stack}
-                            </pre>
-                          )}
-                        </div>
-                      </details>
-                    ))}
+
+              {/* Liste der verarbeiteten URLs */}
+              {completedItems.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-zinc-700">
+                    Zuletzt verarbeitet ({completedItems.length}):
+                  </p>
+                  <div
+                    ref={listRef}
+                    className="max-h-56 overflow-y-auto rounded border border-zinc-200 bg-white"
+                  >
+                    <ul className="divide-y divide-zinc-100">
+                      {completedItems.map((item, idx) => (
+                        <li key={idx} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                          <a
+                            href={`/details/${item.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="truncate font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {item.title}
+                          </a>
+                          <span className="ml-2 shrink-0 text-zinc-400">
+                            {new Date(item.timestamp).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               )}
-              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-zinc-200">
-                <div
-                  className="h-full bg-blue-600 transition-all duration-300"
-                  style={{ width: `${status.progress}%` }}
-                />
-              </div>
-              {status.startedAt && (
-                <p className="text-xs text-zinc-500">
-                  Gestartet: {new Date(status.startedAt).toLocaleString("de-DE")}
-                </p>
+
+              {/* Fehler-Details */}
+              {status.errorLogs && status.errorLogs.length > 0 && (
+                <details className="group">
+                  <summary className="cursor-pointer text-xs font-medium text-red-700 hover:text-red-900">
+                    {status.errorLogs.length} Fehler anzeigen
+                  </summary>
+                  <div className="mt-1 max-h-40 overflow-y-auto rounded border border-red-200 bg-red-50 p-2">
+                    <div className="space-y-1">
+                      {status.errorLogs.map((log, idx) => (
+                        <details key={idx} className="text-xs">
+                          <summary className="cursor-pointer text-red-700 hover:text-red-900">
+                            {log.title} – {new Date(log.timestamp).toLocaleTimeString("de-DE")}
+                          </summary>
+                          <div className="mt-1 rounded bg-white p-2 font-mono text-xs text-red-900">
+                            <div className="font-semibold">{log.error}</div>
+                            {log.stack && (
+                              <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] text-red-700">
+                                {log.stack}
+                              </pre>
+                            )}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  </div>
+                </details>
               )}
+
               <button
                 onClick={handleStop}
-                className="mt-3 w-full rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+                className="mt-2 w-full rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
               >
                 Job stoppen
               </button>
             </>
           ) : status.total > 0 ? (
             <>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-700">Abgeschlossen:</span>
-                <span className="font-medium text-green-600">
+              {/* Abgeschlossen-State */}
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                  Abgeschlossen
+                </span>
+                <span className="text-xs text-zinc-500">
                   {status.processed} / {status.total} Berufe
                 </span>
               </div>
+
               {status.errors > 0 && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-700">Fehler:</span>
-                  <span className="font-medium text-red-600">{status.errors}</span>
-                </div>
+                <p className="text-xs text-red-600">{status.errors} Fehler aufgetreten</p>
               )}
-              {status.errorLogs && status.errorLogs.length > 0 && (
-                <div className="mt-2 max-h-64 overflow-y-auto rounded border border-red-200 bg-red-50 p-2">
-                  <p className="mb-1 text-xs font-medium text-red-800">Fehler-Details:</p>
-                  <div className="space-y-1">
-                    {status.errorLogs.map((log, idx) => (
-                      <details key={idx} className="text-xs">
-                        <summary className="cursor-pointer text-red-700 hover:text-red-900">
-                          {log.title} - {new Date(log.timestamp).toLocaleTimeString("de-DE")}
-                        </summary>
-                        <div className="mt-1 rounded bg-white p-2 font-mono text-xs text-red-900">
-                          <div className="font-semibold">{log.error}</div>
-                          {log.stack && (
-                            <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] text-red-700">
-                              {log.stack}
-                            </pre>
-                          )}
-                        </div>
-                      </details>
-                    ))}
+
+              {/* Letzte verarbeitete Berufe auch nach Abschluss anzeigen */}
+              {completedItems.length > 0 && (
+                <details className="group">
+                  <summary className="cursor-pointer text-xs font-medium text-zinc-700 hover:text-zinc-900">
+                    Verarbeitete Berufe anzeigen ({completedItems.length})
+                  </summary>
+                  <div className="mt-1 max-h-56 overflow-y-auto rounded border border-zinc-200 bg-white">
+                    <ul className="divide-y divide-zinc-100">
+                      {completedItems.map((item, idx) => (
+                        <li key={idx} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                          <a
+                            href={`/details/${item.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="truncate font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {item.title}
+                          </a>
+                          <span className="ml-2 shrink-0 text-zinc-400">
+                            {new Date(item.timestamp).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                </div>
+                </details>
+              )}
+
+              {status.errorLogs && status.errorLogs.length > 0 && (
+                <details className="group">
+                  <summary className="cursor-pointer text-xs font-medium text-red-700 hover:text-red-900">
+                    {status.errorLogs.length} Fehler anzeigen
+                  </summary>
+                  <div className="mt-1 max-h-40 overflow-y-auto rounded border border-red-200 bg-red-50 p-2">
+                    <div className="space-y-1">
+                      {status.errorLogs.map((log, idx) => (
+                        <details key={idx} className="text-xs">
+                          <summary className="cursor-pointer text-red-700 hover:text-red-900">
+                            {log.title} – {new Date(log.timestamp).toLocaleTimeString("de-DE")}
+                          </summary>
+                          <div className="mt-1 rounded bg-white p-2 font-mono text-xs text-red-900">
+                            <div className="font-semibold">{log.error}</div>
+                            {log.stack && (
+                              <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] text-red-700">
+                                {log.stack}
+                              </pre>
+                            )}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  </div>
+                </details>
               )}
             </>
           ) : null}
@@ -200,4 +339,3 @@ export default function BatchGenerateButton() {
     </div>
   );
 }
-
