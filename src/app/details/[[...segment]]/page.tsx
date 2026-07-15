@@ -89,6 +89,18 @@ function slugifyHeading(input: string): string {
 
 type TocItem = { id: string; text: string; level: 2 | 3 };
 
+function prefixHeadings(html: string, professionName: string, headings: string[]): string {
+  if (!html || !professionName) return html;
+  const targets = new Set(headings.map((h) => h.toLowerCase()));
+  return html.replace(/<(h2)([^>]*)>([\s\S]*?)<\/\1>/gi, (match, tag, attrs, inner) => {
+    const text = stripInlineTags(inner).trim().toLowerCase();
+    if (targets.has(text)) {
+      return `<${tag}${attrs}>${professionName} ${inner}</${tag}>`;
+    }
+    return match;
+  });
+}
+
 function addAnchorsAndCollectToc(html: string): { htmlWithIds: string; toc: TocItem[] } {
   const toc: TocItem[] = [];
   let out = html;
@@ -348,7 +360,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
   // Zufällige weitere Berufe für Sidebar
   const randomOthers = await prisma.$queryRaw<
     { slug: string; berufsbild: string }[]
-  >`SELECT "slug","Berufsbild" AS "berufsbild" FROM "Profession" WHERE "status" = 'PUBLISHED' AND "id" <> ${profession.id} ORDER BY random() LIMIT 12`;
+  >`SELECT "slug","Berufsbild" AS "berufsbild" FROM "Profession" WHERE "status" = 'PUBLISHED' AND "id" <> ${profession.id} ORDER BY random() LIMIT 5`;
   
   // Zufällige Magazin-Beiträge für Sidebar
   const randomArticles = await prisma.$queryRaw<
@@ -374,7 +386,12 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
   const linkedHtml = profession.content
     ? autolinkProfessions(profession.content, autolinkTerms)
     : "";
-  const { htmlWithIds, toc } = addAnchorsAndCollectToc(linkedHtml);
+  const prefixedHtml = prefixHeadings(
+    linkedHtml,
+    profession.berufsbild ?? profession.title ?? "",
+    ["Gehalt", "Gehaltsperspektiven", "Karrierechancen"],
+  );
+  const { htmlWithIds, toc } = addAnchorsAndCollectToc(prefixedHtml);
 
   const jsonLd = {
     "@context": "https://schema.org",
