@@ -132,6 +132,10 @@ function addAnchorsAndCollectToc(html: string): { htmlWithIds: string; toc: TocI
   return { htmlWithIds: out, toc };
 }
 
+function stripGenderSuffix(title: string): string {
+  return title.replace(/\/-?in(?:nen)?(?=\s|$|[^a-zA-ZäöüÄÖÜß])/g, "").trim();
+}
+
 function alphabeticalBuckets() {
   const letters = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"];
   return ["#", ...letters];
@@ -156,7 +160,7 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
     },
   });
   if (!profession || profession.status !== "PUBLISHED") return {};
-  const title = (profession.titleFinal ?? profession.title ?? "").trim();
+  const title = stripGenderSuffix((profession.titleFinal ?? profession.title ?? "").trim());
   return {
     title: title || undefined,
     description: profession.descriptionFinal ?? undefined,
@@ -201,7 +205,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
             className="w-full max-w-md md:w-auto"
             toolname="search_professions_index"
             tooldescription="Suche nach Berufsbildern in der berufsbild.com Datenbank mit über 18.000 Berufen. Gibt passende Berufsprofile mit Titel, Untertitel und Link zurück."
-            toolautosubmit
+            toolautosubmit="true"
           >
             <input
               name="q"
@@ -293,7 +297,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
             className="w-full max-w-md md:w-auto"
             toolname="search_professions_by_letter"
             tooldescription={`Suche nach Berufsbildern mit Anfangsbuchstabe ${upper} in der berufsbild.com Datenbank. Gibt passende Berufsprofile zurück.`}
-            toolautosubmit
+            toolautosubmit="true"
           >
             <input
               name="q"
@@ -427,7 +431,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <header className="border-b border-zinc-200 pb-6">
-        <h1 className="text-3xl font-semibold tracking-tight">{profession.title}</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">{stripGenderSuffix(profession.title)}</h1>
         {profession.subtitle ? <p className="mt-2 text-zinc-600">{profession.subtitle}</p> : null}
         <p className="mt-3 flex items-center gap-2 text-sm text-zinc-500">
           <time dateTime={profession.updatedAt.toISOString()}>
