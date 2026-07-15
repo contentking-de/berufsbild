@@ -205,7 +205,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
             className="w-full max-w-md md:w-auto"
             toolname="search_professions_index"
             tooldescription="Suche nach Berufsbildern in der berufsbild.com Datenbank mit über 18.000 Berufen. Gibt passende Berufsprofile mit Titel, Untertitel und Link zurück."
-            toolautosubmit="true"
+            toolautosubmit
           >
             <input
               name="q"
@@ -297,7 +297,7 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
             className="w-full max-w-md md:w-auto"
             toolname="search_professions_by_letter"
             tooldescription={`Suche nach Berufsbildern mit Anfangsbuchstabe ${upper} in der berufsbild.com Datenbank. Gibt passende Berufsprofile zurück.`}
-            toolautosubmit="true"
+            toolautosubmit
           >
             <input
               name="q"

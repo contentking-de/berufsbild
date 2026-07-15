@@ -21,7 +21,7 @@ export function Header() {
               className="hidden items-center md:flex"
               toolname="search_professions_global"
               tooldescription="Globale Suche nach Berufsbildern auf berufsbild.com. Durchsucht über 18.000 Berufsprofile nach Berufsbezeichnung, Tätigkeitsfeld oder Branche und zeigt passende Ergebnisse an."
-              toolautosubmit="true"
+              toolautosubmit
             >
               <input
                 type="search"
