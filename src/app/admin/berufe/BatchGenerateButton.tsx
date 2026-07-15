@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 type ErrorLog = {
   professionId: string;
@@ -18,13 +18,11 @@ type CompletedItem = {
 
 type JobStatus = {
   running: boolean;
-  stale?: boolean;
   processed: number;
   total: number;
   errors: number;
   current?: string;
   startedAt?: string;
-  lastHeartbeat?: string;
   progress: number;
   errorLogs?: ErrorLog[];
   completedItems?: CompletedItem[];
@@ -50,32 +48,63 @@ function estimateRemaining(processed: number, total: number, startedAt: string):
 export default function BatchGenerateButton() {
   const [status, setStatus] = useState<JobStatus | null>(null);
   const [loading, setLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef(false);
+
+  // Status laden
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/generate-professions-batch");
+      const data = await res.json();
+      setStatus(data);
+      return data as JobStatus;
+    } catch (error) {
+      console.error("Fehler beim Abrufen des Status:", error);
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch("/api/admin/generate-professions-batch");
-        const data = await res.json();
-        setStatus(data);
-      } catch (error) {
-        console.error("Fehler beim Abrufen des Status:", error);
-      }
-    }, 2000);
-
-    fetch("/api/admin/generate-professions-batch")
-      .then((res) => res.json())
-      .then((data) => setStatus(data))
-      .catch(console.error);
-
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchStatus]);
 
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
   }, [status?.completedItems?.length]);
+
+  // Verarbeitungs-Loop: triggert jeweils den nächsten Beruf
+  const runProcessingLoop = useCallback(async () => {
+    if (processing) return;
+    setProcessing(true);
+    abortRef.current = false;
+
+    try {
+      while (!abortRef.current) {
+        const res = await fetch("/api/admin/generate-professions-batch", { method: "PUT" });
+        const data = await res.json();
+
+        if (!res.ok || data.done) {
+          await fetchStatus();
+          break;
+        }
+
+        // Status lokal sofort aktualisieren
+        await fetchStatus();
+
+        // Kleine Pause zwischen Requests
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    } catch (error) {
+      console.error("Processing-Loop Fehler:", error);
+    } finally {
+      setProcessing(false);
+    }
+  }, [processing, fetchStatus]);
 
   async function handleStart() {
     if (!confirm("Möchtest du wirklich neuen Content für ALLE Berufe generieren? Das überschreibt vorhandenen Content und kann sehr lange dauern.")) {
@@ -87,7 +116,11 @@ export default function BatchGenerateButton() {
       const data = await res.json();
       if (!res.ok) {
         alert(data.message || "Fehler beim Starten des Batch-Jobs");
+        return;
       }
+      await fetchStatus();
+      // Starte den Processing-Loop
+      runProcessingLoop();
     } catch (error: any) {
       alert(error?.message || "Fehler beim Starten des Batch-Jobs");
     } finally {
@@ -96,12 +129,21 @@ export default function BatchGenerateButton() {
   }
 
   async function handleStop() {
+    abortRef.current = true;
     try {
       await fetch("/api/admin/generate-professions-batch", { method: "DELETE" });
+      await fetchStatus();
     } catch (error) {
       console.error("Fehler beim Stoppen:", error);
     }
   }
+
+  // Auto-Resume: wenn Status "running" ist aber kein Processing-Loop aktiv
+  useEffect(() => {
+    if (status?.running && !processing && !loading) {
+      runProcessingLoop();
+    }
+  }, [status?.running, processing, loading, runProcessingLoop]);
 
   const isRunning = status?.running || false;
   const completedItems = status?.completedItems || [];
@@ -110,7 +152,7 @@ export default function BatchGenerateButton() {
     <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
       <h3 className="text-sm font-medium text-zinc-900">Batch-Content-Generierung</h3>
       <p className="mt-1 text-xs text-zinc-600">
-        Generiere neuen Content für alle Berufe (überschreibt vorhandenen Content). Der Job läuft serverseitig im Hintergrund.
+        Generiere neuen Content für alle Berufe (überschreibt vorhandenen Content). Verarbeitung läuft über deinen Browser.
       </p>
 
       {status && (
@@ -119,30 +161,16 @@ export default function BatchGenerateButton() {
             <>
               {/* Status-Header */}
               <div className="flex items-center gap-2">
-                {status.stale ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                    Hängt
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-                    Läuft
-                  </span>
-                )}
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+                  {processing ? "Verarbeitet..." : "Wartet..."}
+                </span>
                 {status.startedAt && (
                   <span className="text-xs text-zinc-500">
                     seit {formatDuration(Date.now() - new Date(status.startedAt).getTime())}
                   </span>
                 )}
               </div>
-
-              {status.stale && (
-                <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-                  Kein Heartbeat seit {status.lastHeartbeat ? formatDuration(Date.now() - new Date(status.lastHeartbeat).getTime()) : "unbekannt"}.
-                  Der Job ist wahrscheinlich abgestürzt – stoppen und neu starten.
-                </div>
-              )}
 
               {/* Progressbar */}
               <div className="space-y-1">
@@ -153,9 +181,9 @@ export default function BatchGenerateButton() {
                 <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200">
                   <div
                     className="relative h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500"
-                    style={{ width: `${status.progress}%` }}
+                    style={{ width: `${Math.max(status.progress, 0.5)}%` }}
                   >
-                    {status.progress > 3 && (
+                    {status.progress > 5 && (
                       <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
                         {status.progress}%
                       </span>
@@ -231,11 +259,6 @@ export default function BatchGenerateButton() {
                           </summary>
                           <div className="mt-1 rounded bg-white p-2 font-mono text-xs text-red-900">
                             <div className="font-semibold">{log.error}</div>
-                            {log.stack && (
-                              <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] text-red-700">
-                                {log.stack}
-                              </pre>
-                            )}
                           </div>
                         </details>
                       ))}
@@ -250,6 +273,10 @@ export default function BatchGenerateButton() {
               >
                 Job stoppen
               </button>
+
+              <p className="text-[10px] text-zinc-400">
+                Hinweis: Die Verarbeitung läuft über deinen Browser-Tab. Tab nicht schließen!
+              </p>
             </>
           ) : status.total > 0 ? (
             <>
@@ -268,7 +295,6 @@ export default function BatchGenerateButton() {
                 <p className="text-xs text-red-600">{status.errors} Fehler aufgetreten</p>
               )}
 
-              {/* Letzte verarbeitete Berufe auch nach Abschluss anzeigen */}
               {completedItems.length > 0 && (
                 <details className="group">
                   <summary className="cursor-pointer text-xs font-medium text-zinc-700 hover:text-zinc-900">
@@ -310,11 +336,6 @@ export default function BatchGenerateButton() {
                           </summary>
                           <div className="mt-1 rounded bg-white p-2 font-mono text-xs text-red-900">
                             <div className="font-semibold">{log.error}</div>
-                            {log.stack && (
-                              <pre className="mt-1 whitespace-pre-wrap break-all text-[10px] text-red-700">
-                                {log.stack}
-                              </pre>
-                            )}
                           </div>
                         </details>
                       ))}
