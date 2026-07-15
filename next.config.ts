@@ -9,6 +9,19 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          {
+            key: "Permissions-Policy",
+            value: "tools=(self)",
+          },
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       // Berufsfelder-Liste → Details

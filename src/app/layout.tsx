@@ -6,6 +6,7 @@ import { Footer } from "@/components/layout/Footer";
 import PerfMeasureGuard from "@/components/PerfMeasureGuard";
 import CookieConsent from "@/components/CookieConsent";
 import { CanonicalLink } from "@/components/CanonicalLink";
+import WebMCPTools from "@/components/WebMCPTools";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,10 +41,18 @@ export default function RootLayout({
       <head>
         <meta name="color-scheme" content="light" />
         <meta name="supported-color-schemes" content="light" />
+        {/* WebMCP Origin Trial – Token unter https://developer.chrome.com/origintrials/ beantragen */}
+        {process.env.NEXT_PUBLIC_WEBMCP_ORIGIN_TRIAL_TOKEN && (
+          <meta
+            httpEquiv="origin-trial"
+            content={process.env.NEXT_PUBLIC_WEBMCP_ORIGIN_TRIAL_TOKEN}
+          />
+        )}
         <CanonicalLink />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-zinc-900`}>
         <PerfMeasureGuard />
+        <WebMCPTools />
         <Header />
         <main>{children}</main>
         <CookieConsent />

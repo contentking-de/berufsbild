@@ -197,11 +197,17 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
           <h1 className="text-3xl font-semibold tracking-tight">
             Berufe A–Z <span className="ml-2 text-base font-normal text-zinc-500">({formattedCount})</span>
           </h1>
-          <form className="w-full max-w-md md:w-auto">
+          <form
+            className="w-full max-w-md md:w-auto"
+            toolname="search_professions"
+            tooldescription="Suche nach Berufsbildern in der berufsbild.com Datenbank mit über 18.000 Berufen. Gibt passende Berufsprofile mit Titel, Untertitel und Link zurück."
+            toolautosubmit
+          >
             <input
               name="q"
               defaultValue={query}
               placeholder="Beruf suchen …"
+              toolparamdescription="Suchbegriff für Berufsbezeichnung, Tätigkeitsfeld oder Branche (z.B. 'Pflege', 'Informatik', 'Tischler')"
               className="w-full rounded-lg border border-zinc-300 px-4 py-2 outline-none focus:border-zinc-600"
             />
           </form>
@@ -282,11 +288,17 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
           <h1 className="text-3xl font-semibold tracking-tight">
             Berufe A–Z <span className="ml-2 text-base font-normal text-zinc-500">({formattedCount})</span>
           </h1>
-          <form className="w-full max-w-md md:w-auto">
+          <form
+            className="w-full max-w-md md:w-auto"
+            toolname="search_professions_by_letter"
+            tooldescription={`Suche nach Berufsbildern mit Anfangsbuchstabe ${upper} in der berufsbild.com Datenbank. Gibt passende Berufsprofile zurück.`}
+            toolautosubmit
+          >
             <input
               name="q"
               defaultValue={query}
               placeholder="Beruf suchen …"
+              toolparamdescription="Suchbegriff zur Filterung innerhalb des gewählten Buchstabens (z.B. 'Arzt', 'Ingenieur')"
               className="w-full rounded-lg border border-zinc-300 px-4 py-2 outline-none focus:border-zinc-600"
             />
           </form>

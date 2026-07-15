@@ -15,11 +15,19 @@ export function Header() {
             <Link href="/magazin" className="hover:text-zinc-900">
               Magazin
             </Link>
-            <form action="/details" method="get" className="hidden items-center md:flex">
+            <form
+              action="/details"
+              method="get"
+              className="hidden items-center md:flex"
+              toolname="search_professions_global"
+              tooldescription="Globale Suche nach Berufsbildern auf berufsbild.com. Durchsucht über 18.000 Berufsprofile nach Berufsbezeichnung, Tätigkeitsfeld oder Branche und zeigt passende Ergebnisse an."
+              toolautosubmit
+            >
               <input
                 type="search"
                 name="q"
                 placeholder="Beruf suchen …"
+                toolparamdescription="Suchbegriff für Berufsbezeichnung, Tätigkeitsfeld oder Branche (z.B. 'Pflege', 'Informatik', 'Tischler')"
                 className="w-56 rounded-md border border-zinc-300 px-3 py-1.5 text-sm outline-none focus:border-zinc-600"
               />
             </form>
