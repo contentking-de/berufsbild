@@ -9,78 +9,6 @@ type PageProps = {
   searchParams: Promise<{ q?: string }>;
 };
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function makeRegexForTerm(term: string): RegExp {
-  // Erzeuge flexibles Muster: erlaubt Leerzeichen/Non‑Breaking Space/Bindestrich zwischen Wörtern
-  const tokens = term
-    .trim()
-    .split(/[\s\-]+/)
-    .filter(Boolean)
-    .map((t) => escapeRegex(t));
-  if (tokens.length === 0) return /$a/u; // no-op
-  const joined = tokens.join("[\\s\\u00A0\\-]+");
-  // Wortähnliche Grenzen über Unicode: nicht von Buchstaben/Ziffern umschlossen
-  return new RegExp(`(?<![\\p{L}\\p{N}])(${joined})(?![\\p{L}\\p{N}])`, "iu");
-}
-
-const MAX_AUTOLINKS = 30;
-
-function autolinkProfessions(html: string, terms: Array<{ text: string; slug: string }>): string {
-  if (!html || terms.length === 0) return html;
-  const patterns = terms
-    .filter((t) => t.text && t.slug && t.text.length >= 4)
-    .sort((a, b) => (b.text?.length ?? 0) - (a.text?.length ?? 0))
-    .map((t) => {
-      const tokens = t.text.trim().split(/[\s\-\/]+/).filter(Boolean);
-      const longest = tokens.reduce((a, b) => (a.length >= b.length ? a : b), "");
-      return {
-        slug: t.slug,
-        text: t.text,
-        quickCheck: longest.toLowerCase(),
-      };
-    });
-
-  const htmlLower = html.toLowerCase();
-  const candidates = patterns.filter((p) => htmlLower.includes(p.quickCheck));
-
-  const linkedOnce = new Set<string>();
-  const parts = html.split(/(<[^>]+>)/g);
-  let insideAnchor = false;
-
-  for (let i = 0; i < parts.length; i++) {
-    if (linkedOnce.size >= MAX_AUTOLINKS) break;
-    const part = parts[i];
-    if (part.startsWith("<")) {
-      const isOpenA = /^<a(\s|>)/i.test(part);
-      const isCloseA = /^<\/a\s*>/i.test(part);
-      if (isOpenA) insideAnchor = true;
-      if (isCloseA) insideAnchor = false;
-      continue;
-    }
-    if (insideAnchor) continue;
-    let text = part;
-    const textLower = text.toLowerCase();
-    for (const p of candidates) {
-      if (linkedOnce.size >= MAX_AUTOLINKS) break;
-      if (linkedOnce.has(p.slug)) continue;
-      if (!textLower.includes(p.quickCheck)) continue;
-      const re = makeRegexForTerm(p.text);
-      if (!re.test(text)) continue;
-      text = text.replace(re, (_m, g1) => {
-        if (linkedOnce.has(p.slug)) return _m;
-        linkedOnce.add(p.slug);
-        return `<a href="/details/${p.slug}">${g1}</a>`;
-      });
-    }
-    parts[i] = text;
-  }
-
-  return parts.join("");
-}
-
 function stripInlineTags(html: string): string {
   return html.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 }
@@ -371,19 +299,8 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
   if (!profession || profession.status !== "PUBLISHED") {
     notFound();
   }
-  // Parallele Queries: Autolink-Begriffe (limitiert), Sidebar-Berufe, Magazin-Beiträge
-  const [linkTargets, randomOthers, randomArticles] = await Promise.all([
-    prisma.profession.findMany({
-      where: { status: "PUBLISHED", NOT: { id: profession.id } },
-      select: {
-        berufsbild: true,
-        berufsbildMaennlich: true,
-        berufsbildWeiblich: true,
-        title: true,
-        slug: true,
-      },
-      take: 500,
-    }),
+  // Parallele Queries: Sidebar-Berufe und Magazin-Beiträge
+  const [randomOthers, randomArticles] = await Promise.all([
     prisma.$queryRaw<
       { slug: string; berufsbild: string }[]
     >`SELECT "slug","Berufsbild" AS "berufsbild" FROM "Profession" WHERE "status" = 'PUBLISHED' AND "id" <> ${profession.id} ORDER BY random() LIMIT 5`,
@@ -391,28 +308,11 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
       { slug: string; title: string }[]
     >`SELECT "slug","title" FROM "Article" WHERE "status" = 'PUBLISHED' ORDER BY random() LIMIT 5`,
   ]);
-  const autolinkTerms: Array<{ text: string; slug: string }> = [];
-  for (const t of linkTargets) {
-    const names = [
-      t.berufsbild,
-      t.berufsbildMaennlich,
-      t.berufsbildWeiblich,
-      t.title,
-    ];
-    const seen = new Set<string>();
-    for (const name of names) {
-      if (!name) continue;
-      const key = name.trim().toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      autolinkTerms.push({ text: name.trim(), slug: t.slug });
-    }
-  }
-  const linkedHtml = profession.content
-    ? autolinkProfessions(profession.content, autolinkTerms)
-    : "";
+
+  // Vorberechnete Autolinks verwenden (per Script generiert), Fallback auf Roh-Content
+  const baseHtml = profession.contentLinked ?? profession.content ?? "";
   const prefixedHtml = prefixHeadings(
-    linkedHtml,
+    baseHtml,
     profession.berufsbild ?? profession.title ?? "",
     ["Gehalt", "Gehaltsperspektiven", "Karrierechancen"],
   );

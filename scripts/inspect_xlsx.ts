@@ -1,8 +1,8 @@
 import path from "node:path";
 import fs from "node:fs";
-import xlsx from "xlsx";
+import ExcelJS from "exceljs";
 
-function main() {
+async function main() {
   const [, , fileArg] = process.argv;
   const filePath = fileArg || "V5_Final.xlsx";
   const absolute = path.resolve(process.cwd(), filePath);
@@ -10,16 +10,18 @@ function main() {
     console.error(`Datei nicht gefunden: ${absolute}`);
     process.exit(1);
   }
-  const wb = xlsx.readFile(absolute);
-  const sheetName = wb.SheetNames[0];
-  const ws = wb.Sheets[sheetName];
-  const rows = xlsx.utils.sheet_to_json(ws, { header: 1 }) as any[][];
-  if (!rows.length) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(absolute);
+  const ws = workbook.worksheets[0];
+  if (!ws || ws.rowCount === 0) {
     console.error("Arbeitsblatt ist leer.");
     process.exit(1);
   }
-  const headers = (rows[0] ?? []).map((v) => String(v ?? "").trim());
-  console.log(JSON.stringify({ sheetName, headers }, null, 2));
+  const headers: string[] = [];
+  ws.getRow(1).eachCell((cell) => {
+    headers.push(String(cell.text ?? "").trim());
+  });
+  console.log(JSON.stringify({ sheetName: ws.name, headers }, null, 2));
 }
 
 main();

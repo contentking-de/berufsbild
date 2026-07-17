@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +19,24 @@ function alphabeticalKeyFrom(title: string): string {
   return /[A-Z]/.test(k) ? k : "#";
 }
 
+function worksheetToJson(worksheet: ExcelJS.Worksheet): Record<string, any>[] {
+  const headers: string[] = [];
+  worksheet.getRow(1).eachCell((cell, colNumber) => {
+    headers[colNumber - 1] = cell.text?.trim() ?? "";
+  });
+  const rows: Record<string, any>[] = [];
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const obj: Record<string, any> = {};
+    row.eachCell((cell, colNumber) => {
+      const key = headers[colNumber - 1];
+      if (key) obj[key] = cell.value ?? null;
+    });
+    if (Object.keys(obj).length > 0) rows.push(obj);
+  });
+  return rows;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
@@ -28,13 +46,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Kein Datei-Upload gefunden (field 'file')." }, { status: 400 });
     }
     const arrayBuffer = await file.arrayBuffer();
-    const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: "array" });
-    const sheetName = sheetOverride || wb.SheetNames[0];
-    const ws = wb.Sheets[sheetName];
+    const workbook = new ExcelJS.Workbook();
+    // @ts-expect-error exceljs types lag behind Node 20+ Buffer generics
+    await workbook.xlsx.load(Buffer.from(arrayBuffer));
+    const sheetName = sheetOverride || workbook.worksheets[0]?.name;
+    const ws = workbook.getWorksheet(sheetName);
     if (!ws) {
       return NextResponse.json({ error: `Sheet nicht gefunden: ${sheetName}` }, { status: 400 });
     }
-    const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: null });
+    const rows = worksheetToJson(ws);
 
     let processed = 0;
     let created = 0;
