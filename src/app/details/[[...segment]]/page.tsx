@@ -26,10 +26,12 @@ function makeRegexForTerm(term: string): RegExp {
   return new RegExp(`(?<![\\p{L}\\p{N}])(${joined})(?![\\p{L}\\p{N}])`, "iu");
 }
 
+const MAX_AUTOLINKS = 30;
+
 function autolinkProfessions(html: string, terms: Array<{ text: string; slug: string }>): string {
   if (!html || terms.length === 0) return html;
   const patterns = terms
-    .filter((t) => t.text && t.slug)
+    .filter((t) => t.text && t.slug && t.text.length >= 4)
     .sort((a, b) => (b.text?.length ?? 0) - (a.text?.length ?? 0))
     .map((t) => {
       const tokens = t.text.trim().split(/[\s\-\/]+/).filter(Boolean);
@@ -37,16 +39,19 @@ function autolinkProfessions(html: string, terms: Array<{ text: string; slug: st
       return {
         slug: t.slug,
         text: t.text,
-        re: makeRegexForTerm(t.text),
         quickCheck: longest.toLowerCase(),
       };
     });
+
+  const htmlLower = html.toLowerCase();
+  const candidates = patterns.filter((p) => htmlLower.includes(p.quickCheck));
 
   const linkedOnce = new Set<string>();
   const parts = html.split(/(<[^>]+>)/g);
   let insideAnchor = false;
 
   for (let i = 0; i < parts.length; i++) {
+    if (linkedOnce.size >= MAX_AUTOLINKS) break;
     const part = parts[i];
     if (part.startsWith("<")) {
       const isOpenA = /^<a(\s|>)/i.test(part);
@@ -58,11 +63,13 @@ function autolinkProfessions(html: string, terms: Array<{ text: string; slug: st
     if (insideAnchor) continue;
     let text = part;
     const textLower = text.toLowerCase();
-    for (const p of patterns) {
+    for (const p of candidates) {
+      if (linkedOnce.size >= MAX_AUTOLINKS) break;
       if (linkedOnce.has(p.slug)) continue;
       if (!textLower.includes(p.quickCheck)) continue;
-      if (!p.re.test(text)) continue;
-      text = text.replace(p.re, (_m, g1) => {
+      const re = makeRegexForTerm(p.text);
+      if (!re.test(text)) continue;
+      text = text.replace(re, (_m, g1) => {
         if (linkedOnce.has(p.slug)) return _m;
         linkedOnce.add(p.slug);
         return `<a href="/details/${p.slug}">${g1}</a>`;
@@ -364,26 +371,26 @@ export default async function DetailsRouterPage({ params, searchParams }: PagePr
   if (!profession || profession.status !== "PUBLISHED") {
     notFound();
   }
-  // Alle anderen veröffentlichten Berufe laden, um Auto-Verlinkungen zu setzen
-  const linkTargets = await prisma.profession.findMany({
-    where: { status: "PUBLISHED", NOT: { id: profession.id } },
-    select: {
-      berufsbild: true,
-      berufsbildMaennlich: true,
-      berufsbildWeiblich: true,
-      title: true,
-      slug: true,
-    },
-  });
-  // Zufällige weitere Berufe für Sidebar
-  const randomOthers = await prisma.$queryRaw<
-    { slug: string; berufsbild: string }[]
-  >`SELECT "slug","Berufsbild" AS "berufsbild" FROM "Profession" WHERE "status" = 'PUBLISHED' AND "id" <> ${profession.id} ORDER BY random() LIMIT 5`;
-  
-  // Zufällige Magazin-Beiträge für Sidebar
-  const randomArticles = await prisma.$queryRaw<
-    { slug: string; title: string }[]
-  >`SELECT "slug","title" FROM "Article" WHERE "status" = 'PUBLISHED' ORDER BY random() LIMIT 5`;
+  // Parallele Queries: Autolink-Begriffe (limitiert), Sidebar-Berufe, Magazin-Beiträge
+  const [linkTargets, randomOthers, randomArticles] = await Promise.all([
+    prisma.profession.findMany({
+      where: { status: "PUBLISHED", NOT: { id: profession.id } },
+      select: {
+        berufsbild: true,
+        berufsbildMaennlich: true,
+        berufsbildWeiblich: true,
+        title: true,
+        slug: true,
+      },
+      take: 500,
+    }),
+    prisma.$queryRaw<
+      { slug: string; berufsbild: string }[]
+    >`SELECT "slug","Berufsbild" AS "berufsbild" FROM "Profession" WHERE "status" = 'PUBLISHED' AND "id" <> ${profession.id} ORDER BY random() LIMIT 5`,
+    prisma.$queryRaw<
+      { slug: string; title: string }[]
+    >`SELECT "slug","title" FROM "Article" WHERE "status" = 'PUBLISHED' ORDER BY random() LIMIT 5`,
+  ]);
   const autolinkTerms: Array<{ text: string; slug: string }> = [];
   for (const t of linkTargets) {
     const names = [
