@@ -136,10 +136,11 @@ async function main() {
     const updates = batch.map((p) => {
       try {
         const linked = autolinkProfessions(p.content!, p.slug, allTerms);
-        return prisma.profession.update({
-          where: { id: p.id },
-          data: { contentLinked: linked },
-        });
+        return prisma.$executeRaw`
+          UPDATE "Profession"
+          SET "content_linked" = ${linked}
+          WHERE "id" = ${p.id}
+        `;
       } catch (e) {
         errors++;
         console.error(`  Fehler bei ${p.slug}:`, e);

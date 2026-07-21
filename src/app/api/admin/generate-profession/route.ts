@@ -167,6 +167,7 @@ Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
       where: { id },
       data: {
         content: html,
+        contentLinked: null,
         contentRegeneratedAt: new Date(),
       },
     });

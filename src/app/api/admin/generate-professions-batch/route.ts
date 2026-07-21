@@ -239,6 +239,7 @@ Liefere ausschließlich das HTML mit dieser exakten Struktur.`;
       where: { id: profession.id },
       data: {
         content: html,
+        contentLinked: null,
         contentRegeneratedAt: new Date(),
       },
     });
