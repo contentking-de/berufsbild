@@ -21,6 +21,14 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   }
   const { id } = await params;
   const data = await req.json();
+  if (data.status === "PUBLISHED" && !data.publishedAt) {
+    const existing = await prisma.article.findUnique({ where: { id }, select: { publishedAt: true } });
+    if (!existing?.publishedAt) {
+      data.publishedAt = new Date();
+    }
+  } else if (data.status === "DRAFT") {
+    data.publishedAt = null;
+  }
   const updated = await prisma.article.update({
     where: { id },
     data,

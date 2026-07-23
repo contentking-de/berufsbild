@@ -49,15 +49,27 @@ async function updateArticle(formData: FormData) {
     content?: string | null;
     coverImageUrl?: string | null;
     status?: "DRAFT" | "PUBLISHED";
+    publishedAt?: Date | null;
   } = {};
   if (title !== undefined) data.title = title;
   if (excerpt !== undefined) data.excerpt = excerpt ?? null;
   if (content !== undefined) data.content = content ?? null;
   if (coverImageUrl !== undefined) data.coverImageUrl = coverImageUrl || null;
-  if (status !== undefined) data.status = status;
-  if (Object.keys(data).length === 0) return; // nichts zu aktualisieren
+  if (status !== undefined) {
+    data.status = status;
+    if (status === "PUBLISHED") {
+      const existing = await prisma.article.findUnique({ where: { id }, select: { publishedAt: true } });
+      if (!existing?.publishedAt) {
+        data.publishedAt = new Date();
+      }
+    } else if (status === "DRAFT") {
+      data.publishedAt = null;
+    }
+  }
+  if (Object.keys(data).length === 0) return;
   await prisma.article.update({ where: { id }, data });
   revalidatePath("/admin/artikel");
+  revalidatePath("/magazin");
 }
 
 async function deleteArticle(formData: FormData) {
